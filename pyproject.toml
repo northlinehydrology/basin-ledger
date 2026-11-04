@@ -1,0 +1,34 @@
+[project]
+name = "basinledger"
+version = "0.0.1"
+description = "Basin Ledger: a basin's water, quantity and quality, balanced day by day across coupled models (SWAT+, MODFLOW 6, water users) through BMI."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
+authors = [{ name = "Northline Hydrology" }]
+dependencies = [
+    "numpy>=1.26",
+    "bmipy>=2.0",
+    "flopy>=3.9",
+    "modflowapi>=0.2",
+    "swatplus-bmi>=0.1",
+]
+
+[project.optional-dependencies]
+# water-user models from the open Water Ledger packages (CoolingWaterBmi first)
+users = ["waterledger-models>=3"]
+
+[dependency-groups]
+dev = ["pytest>=8", "waterledger-models>=3.9", "pyyaml>=6"]  # pyyaml: waterledger-models 3.9.0 imports it without declaring it (docs/requests.md)
+examples = ["marimo>=0.9", "matplotlib>=3.8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/basinledger"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["swat: needs the SWAT+ exchange executable and refdata/ (swatplus-bmi build)"]
