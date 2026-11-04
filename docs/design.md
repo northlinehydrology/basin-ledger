@@ -32,6 +32,11 @@ tested on a synthetic example. The rest of this note is design. Sections say whi
 5. **Packages first.** Water-user physics lives in `waterledger-models`, SWAT+ access in `swatplus-bmi`. Basin Ledger
    holds only the coupling, the accounting and the rules. Changes those packages need are written as requests
    (`docs/requests.md`).
+6. **Calibrated models, or a screening run.** Using Basin Ledger depends on calibrated models. Every example carries
+   its calibration and validation record. An example without calibrated models is labelled a screening run, never a
+   study result (see Calibration).
+7. **NextGen geography throughout.** SWAT+ projects are built on the NextGen hydrofabric, and everything the engine
+   reports is keyed to hydrofabric ids, so results compare with the National Water Model (see NextGen geography).
 
 ## Layout
 
@@ -41,18 +46,26 @@ src/basinledger/
   driver.py            Basin: steps every model one day at a time and keeps the ledger
   ledger.py            daily accounts, paired as sent and received, checked every day
   users.py             the water-user interface: roles, units, hourly-to-daily integration, the user's balance
-  mapping.py           area maps between SWAT+ objects and MODFLOW 6 cells
+  mapping.py           area maps between SWAT+ objects (catchments, aquifers, HRUs) and MODFLOW 6 cells
   units.py             unit factors to the ledger's SI units
   coupling/
     modflow6.py        MODFLOW 6 through libmf6 (modflowapi): prepare, set, solve, read
     recharge.py        SWAT+ aquifer recharge -> MODFLOW 6 recharge, one-way
   chain.py             the utility chain (stub)
   rules.py             feedback rules: curtailment, dry mode, drawdown limits (stub)
+  calibration.py       parameters, observations, calibration records, PEST++ IES (stub)
+  hydrofabric.py       SWAT+ projects and maps from the NextGen hydrofabric, results keyed to its ids (stub)
   testing.py           a synthetic water user for the tests
 examples/
   synthetic/           SWAT+'s Osu_1hru + a small MODFLOW 6 model + the synthetic user (the tests use it)
     basin.toml  model.py  user.toml  fetch.py  notebook.py  README.md
   plaster-creek/       planned: Plaster Creek (Kent County, Michigan) with a data center campus
+  <place>/             any example:
+    basin.toml         the config
+    fetch.py           public data and observations into a cache (outside git)
+    README.md          the write-up
+    maps/              catchment, aquifer and HRU to cell areas; flowpath to cell lengths (CSV)
+    calibration/       record.toml (status, periods, statistics), parameters.csv, observations.csv
 tests/                 unit tests, and the one-way coupling run on the synthetic example
 docs/
   design.md            this note
@@ -65,6 +78,9 @@ Each example folder holds:
 - `basin.toml`, the config;
 - `fetch.py`, which downloads its public data into a cache folder (outside git) and builds or places the model files;
 - `README.md`, a short write-up: the basin, the models and their versions, calibration status, what the example shows;
+- `maps/`, the maps between the hydrofabric and the MODFLOW 6 grid (see NextGen geography);
+- `calibration/`, its calibration and validation record (see Calibration). Without one, the example is a screening
+  run;
 - optionally a builder module for its MODFLOW 6 model and a notebook.
 
 ## The models and how each is driven
@@ -152,23 +168,78 @@ A component with a daily or other step works the same way. The driver only asks 
 Each link is a ledger pair. A user on municipal supply is routed `utility:<system>`, and the chain places the water.
 A user with its own wells or intake is routed directly.
 
-## Geography: NextGen
+## NextGen geography
 
-The spatial frame is NOAA's [NextGen hydrofabric](https://lynker-spatial.s3-us-west-2.amazonaws.com/hydrofabric/index.html)
-(v2.2): catchments (`cat-`), flowpaths (`wb-`) and nexuses (`nex-`). Results are keyed to those ids, so they line up
-with the National Water Model and with anything else on that frame.
+To be usable with NextGen, Basin Ledger adopts NextGen's geography. The spatial frame for every real example is
+NOAA's NextGen hydrofabric
+([v2.2](https://lynker-spatial.s3-us-west-2.amazonaws.com/hydrofabric/index.html)). It has three kinds of object:
 
-- **SWAT+** is built on the hydrofabric: one subbasin per catchment, one channel per flowpath. A builder for that is
-  planned; SWAT+'s usual tools (QSWAT+, SWAT+ Editor) delineate their own watersheds. The example records the
-  hydrofabric version and each SWAT+ object's id.
-- **MODFLOW 6** keeps its own grid. Maps tie it to the hydrofabric: catchments and HRUs to cells by area of overlap,
-  and flowpaths to river or stream cells by length in each cell. Maps are made in GIS (flopy's `GridIntersect` on the
-  hydrofabric layers), written to CSV and read through config, so coupling code never sees geometry.
-- **Water users** are points, and the utility chain places their water.
+- catchments (`cat-`);
+- flowpaths (`wb-`), one per catchment;
+- nexuses (`nex-`), where flowpaths join.
 
-NextGen's own framework (ngen) runs one model per catchment. SWAT+ and MODFLOW 6 each solve their whole domain at
-once, so Basin Ledger uses NextGen's geography, not its runtime. A Basin Ledger result can be handed to ngen at a
-nexus.
+Each example pins the hydrofabric version it was built on.
+
+**SWAT+ on the hydrofabric.** A SWAT+ project for an example is built from the hydrofabric, not delineated anew:
+
+- **Subbasins:** one per catchment. SWAT+'s routing units and aquifers follow, one of each per catchment.
+- **Channels:** one per flowpath, connected as the hydrofabric's flowpath-nexus-flowpath network connects them. Channel
+  geometry starts from the hydrofabric's flowpath attributes (length, slope, bankfull width and depth).
+- **HRUs:** split within each catchment by land cover (NLCD), soils (gSSURGO) and slope, as SWAT+'s tools do. Each HRU
+  keeps its catchment's id.
+- **Nexus output:** each nexus's flow is the outflow of the channels draining to it, read every day through
+  swatplus-bmi and reported under the nexus id.
+- **The builder** (`hydrofabric.py`, planned) writes SWAT+'s connection and object files from the hydrofabric
+  GeoPackage and a lookup table (`swat_ids.csv`) of SWAT+ object name against hydrofabric id. SWAT+'s usual tools
+  (QSWAT+, SWAT+ Editor) delineate their own watersheds, so this builder is new work. Weather and parameters still go
+  through SWAT+'s own input files.
+
+**MODFLOW 6 to and from catchments.** MODFLOW 6 keeps its own grid, which usually reaches past the basin to its own
+boundaries. Maps tie the grid to the hydrofabric. They are made in GIS (flopy's `GridIntersect` on the hydrofabric
+layers), written to `examples/<place>/maps/` as CSV, and named in the example's config. Coupling code never sees
+geometry, and nothing is hard-coded.
+
+| Map | Rows | Used for |
+|---|---|---|
+| `catchment_cells.csv` | catchment (or SWAT+ aquifer, or HRU), layer, row, col, area_m2 | recharge in; drawdown and storage out |
+| `flowpath_cells.csv` | flowpath, layer, row, col, length_m | stream-aquifer exchange (base flow) out, and in for losing reaches |
+| wells in `basin.toml` | name, cell (or MAW connections) | pumping in; heads at wells out |
+
+- **Recharge in.** Each catchment's recharge from SWAT+ (from its aquifer now; from its HRUs once swatplus-bmi exposes
+  HRU percolation) spreads over cells by area of overlap. Volume is kept exactly (built: `mapping.py`).
+- **Base flow out.** Each day, MODFLOW 6's stream-aquifer exchange (RIV or SFR `SIMVALS`) is summed per flowpath
+  through the length map. That gives groundwater discharge to each flowpath, reported under its `wb-` id. In two-way
+  mode this is what enters SWAT+'s channel (see The MODFLOW 6 coupling).
+- **Well effects out.**
+  - Streamflow depletion per flowpath is the difference in base flow between a run with the user and one without.
+  - Drawdown per catchment is the area-weighted mean and the maximum over the catchment's cells. Drawdown at named
+    cells (utility wells, sentinel wells) is reported by cell.
+  - Each is keyed to the flowpath or catchment id.
+- **Back to catchments.** The same area map runs in reverse: a catchment's value is the sum of cell values × overlap
+  area, over the overlap area. Cells outside every catchment are reported together as "outside the basin", so the
+  grid's water still balances.
+- **Checks.** Every map is checked when the run starts:
+  - no cell may be covered by more than its area;
+  - each catchment's mapped area must match its hydrofabric area within the example's tolerance (`area_rtol`);
+  - each flowpath's mapped length must match its hydrofabric length within the same tolerance.
+
+**Keyed to hydrofabric ids.** Everything the engine reports is keyed to hydrofabric ids:
+
+- ledger accounts (`recharge:cat-…`, `baseflow:wb-…`);
+- daily output tables, with an id column;
+- figures.
+
+Streamflow at a nexus or flowpath then compares directly with the National Water Model's retrospective and
+operational output for the same id. Water users are points and are reported by name, with the catchment they sit in.
+The utility chain places their water by source.
+
+**The synthetic example** has no hydrofabric. Osu_1hru's objects keep their SWAT+ names, and its map is
+`all:aqu001`. The engine treats a hydrofabric id and a SWAT+ name the same way, as an object name in a map, so
+nothing in the code depends on which kind it is.
+
+**ngen.** NextGen's own framework runs one model per catchment. SWAT+ and MODFLOW 6 each solve their whole domain at
+once, so Basin Ledger uses NextGen's geography, not its runtime. Because results are keyed to nexus ids, a Basin Ledger
+result can be handed to ngen at a nexus, as an upstream inflow.
 
 ## Forcing: AORC
 
@@ -263,21 +334,62 @@ The ledger enters, every day, each transfer as sent and as received, plus each c
 
 ## Calibration
 
-An example is only as good as its models' calibration. Every example records its calibration and validation, and an
-uncalibrated example is labeled a screening run.
+Using Basin Ledger depends on calibrated models. Calibration is part of every example, not something a study adds
+later. The tooling is a later module (`calibration.py`, stubbed); this section is its design.
 
-- **One-way couplings** keep each model's own calibration:
-  - SWAT+ against streamflow (USGS gages) and, where available, water quality;
-  - MODFLOW 6 against heads (USGS and state well records) and base flow.
-- **With feedback** (two-way exchange, curtailment, drawdown limits), the models are calibrated jointly:
-  - the prior comes from the individual calibrations;
-  - [PEST++ IES](https://github.com/usgs/pestpp) runs with Basin Ledger's driver as the forward model;
-  - the parameters are those the feedback touches: streambed conductance, aquifer hydraulic conductivity and specific
-    yield near streams, and SWAT+'s percolation and channel parameters;
-  - the observations are streamflow (low flows weighted), heads, and gage-based base flow.
-  - The forward model is one command (`python -m basinledger run basin.toml`, planned) that writes the observed
-    quantities to files PEST++ reads. IES gives an ensemble, so results can carry its spread.
-- Calibration runs are parallel by nature. On a shared machine they're held to the cores Andrew allows.
+**Parameters.** The engine exposes each model's adjustable parameters as one named list, with bounds:
+
+- **SWAT+:** parameters changed in its input files before a run, through `calibration.cal` (absolute or relative
+  changes by object). swatplus-bmi refuses SWAT+'s soft and hard calibration runs, but a run with changed parameters
+  is an ordinary run. Whether every `calibration.cal` change applies in exchange mode is to be checked.
+- **MODFLOW 6:** package arrays (hydraulic conductivity, specific yield, streambed conductance, recharge multipliers),
+  written with flopy, by zone or by pilot points through pyEMU.
+- **Water users:** parameters in each component's config file, e.g. `CoolingWaterBmi`'s cycles of concentration.
+  These are usually set from the applicant's data, not calibrated.
+
+**Observations.** An example's `fetch.py` loads them into its cache, with their source and retrieval date:
+
+- **USGS streamflow:** daily values from the National Water Information System. Each gage is matched to its
+  hydrofabric flowpath or nexus through the hydrofabric's gage crosswalk.
+- **USGS groundwater levels:** each well is matched to a MODFLOW 6 cell, with the layer taken from its screened depth.
+  State records (in Michigan, Wellogic static water levels) are added where USGS has few wells, weighted for their
+  lower quality.
+- **Where a question needs them:** water quality from the Water Quality Portal, and base flow separated from gage
+  records.
+
+**How models are calibrated.**
+
+- **One-way coupling:** each model is calibrated on its own:
+  - SWAT+ against streamflow, with low flows weighted, since low flows are where a large user shows;
+  - MODFLOW 6 against heads and base flow, with SWAT+'s calibrated recharge as its input.
+- **Feedback** (two-way exchange, curtailment, drawdown limits): the models are calibrated jointly.
+  - The individual calibrations give the prior.
+  - [PEST++ IES](https://github.com/usgs/pestpp) runs Basin Ledger's driver as the forward model. The planned command
+    is `python -m basinledger run basin.toml --parameters pars.csv --observations obs.csv`. It applies a parameter
+    set, runs every model through the driver, and writes the simulated values at every observation for PEST++ to
+    read.
+  - The adjustable parameters are those the feedback touches: streambed conductance, aquifer hydraulic conductivity
+    and specific yield near streams, and SWAT+'s percolation and channel parameters.
+  - IES gives an ensemble, so results can carry its spread.
+- **Shared machines:** calibration runs are parallel, and are held to the cores Andrew allows.
+
+**The record.** Each example keeps `calibration/` beside its config, named in `basin.toml` as
+`[calibration] record = "calibration/record.toml"`:
+
+- `record.toml`:
+  - status (`calibrated` or `screening`) and the date;
+  - the calibration and validation periods;
+  - model versions and the hydrofabric version;
+  - what was calibrated (separately or jointly) and the objective;
+  - statistics by site, for calibration and validation. For streamflow: NSE, KGE, percent bias and a low-flow
+    statistic. For heads: mean error, RMSE and RMSE over the range of observed heads. Each is judged against
+    published criteria (Moriasi et al., 2015).
+- `parameters.csv`: the final values, or the ensemble.
+- `observations.csv`: every site used (id, source, period, weight) and the hydrofabric id or cell it was matched to.
+
+**Screening runs.** An example with no record, or with a record whose status isn't `calibrated`, is a screening run.
+The driver reports its status (`Basin.status`), and every table and figure it writes carries it. A screening run can
+show how the engine and the scenarios work. It is never a study result. The synthetic example is a screening run.
 
 ## Scenarios from a shared warm-up
 
@@ -310,11 +422,12 @@ Scenarios then run in parallel, each in its own process.
     are archived (doi:10.5066/F76D5R5V). Either can be converted to MODFLOW 6 with flopy and refined around the basin.
     The model's own files for 2010 weren't found in a data release; this needs checking with USGS.
   - **Calibration data:** USGS streamflow on Plaster Creek (gage to be confirmed) and Michigan well records. The
-    Plaster Creek TMDL record (E. coli, sediment and biota) gives water quality.
+    Plaster Creek TMDL record (E. coli, sediment and biota) gives water quality. Until its record says
+    `calibrated`, its results are a screening run.
 - **Private studies** live in the private `northline` repository (`studies/<name>/`), never here. A study:
   - depends on `basinledger` at a pinned version;
-  - follows the example layout (`basin.toml`, `fetch.py`, a write-up), with client data in its own folders under the
-    client's confidentiality terms;
+  - follows the example layout (`basin.toml`, `fetch.py`, `maps/`, `calibration/`, a write-up), with client data in
+    its own folders under the client's confidentiality terms;
   - runs the same engine, so a result can be reproduced from its config and its data.
 
   Anything a study needs from the engine is added here first, generally, with a test on the synthetic example.
@@ -329,8 +442,10 @@ Scenarios then run in parallel, each in its own process.
 3. Surface routes through SWAT+: water allocation demand for intakes, point sources for outfalls, with loads.
 4. Two-way stream-aquifer exchange (RIV, then SFR), with the SWAT+ aquifer set to pass recharge through.
 5. MODFLOW 6 restart from saved heads for scenarios, and the test that restarts match unbroken runs.
-6. AORC forcing for SWAT+ and the users; a SWAT+ project builder on the hydrofabric.
-7. Plaster Creek as the first public example, then PEST++ IES with the driver as the forward model.
+6. AORC forcing for SWAT+ and the users; the SWAT+ project builder on the hydrofabric, with outputs at every nexus.
+7. The calibration module: parameters, observations from USGS, the record, and PEST++ IES with the driver as the
+   forward model.
+8. Plaster Creek as the first public example, calibrated.
 
 ## References
 
@@ -343,6 +458,8 @@ Scenarios then run in parallel, each in its own process.
 - Hughes, J.D., Russcher, M.J., Langevin, C.D., Morway, E.D., McDonald, R.R., 2022. The MODFLOW Application Programming
   Interface for simulation control and software interoperability. Environ. Model. Softw. 148, 105257.
   https://doi.org/10.1016/j.envsoft.2021.105257
+- Moriasi, D.N., Gitau, M.W., Pai, N., Daggupati, P., 2015. Hydrologic and water quality models: performance measures
+  and evaluation criteria. Trans. ASABE 58(6), 1763–1785. https://doi.org/10.13031/trans.58.10715
 - Sommerlot, A., 2026. swatplus-bmi: run SWAT+ one day at a time through BMI. Zenodo.
   https://doi.org/10.5281/zenodo.23963201
 - Other couplings: `docs/prior-art.md`.
