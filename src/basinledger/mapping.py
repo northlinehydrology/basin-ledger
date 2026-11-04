@@ -36,6 +36,15 @@ class AreaMap:
         vol = np.bincount(self.node, weights=rate[self.obj] * self.area, minlength=len(cell_area))
         return vol / cell_area
 
+    def to_objects(self, values: np.ndarray) -> np.ndarray:
+        """Values per cell (heads, drawdown) -> the overlap-area-weighted mean per object: the map run in reverse."""
+        w = np.bincount(self.obj, weights=self.area, minlength=len(self.objects))
+        return np.bincount(self.obj, weights=values[self.node] * self.area, minlength=len(self.objects)) / w
+
+    def outside(self, n_cells: int) -> np.ndarray:
+        """Cells no object covers (reported together as outside the basin)."""
+        return np.setdiff1d(np.arange(n_cells), self.node)
+
     def volume(self, rate: np.ndarray) -> float:
         """Depth rate per object times its mapped area, summed: what leaves the source model."""
         return float(np.sum(rate * self.mapped_area()))

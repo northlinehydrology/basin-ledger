@@ -46,3 +46,11 @@ def test_from_csv(tmp_path):
     assert m.node.tolist() == [1, 2] and m.obj.tolist() == [0, 1]
     with pytest.raises(KeyError):
         AreaMap.from_csv(f, ["a"], lambda l, r, c: 0)
+
+
+def test_cells_back_to_objects():
+    m, cell_area = two_aquifers()
+    drawdown = np.array([1.0, 2.0, 4.0, 8.0])
+    # a: (100*1 + 100*2 + 50*4) / 250; b: (50*4 + 100*8) / 150
+    np.testing.assert_allclose(m.to_objects(drawdown), [2.0, 1000 / 150])
+    assert m.outside(6).tolist() == [4, 5]
