@@ -30,8 +30,10 @@ The design for the rest is in [docs/design.md](docs/design.md):
 - the utility chain;
 - feedback rules (curtailment, dry mode, drawdown limits);
 - two-way stream-aquifer exchange;
-- NextGen geography and AORC forcing;
-- joint calibration with PEST++ IES;
+- NextGen geography throughout: SWAT+ built on the hydrofabric, results keyed to its ids;
+- AORC forcing;
+- calibration as part of every example, jointly with PEST++ IES where there's feedback. An example without
+  calibrated models is a screening run, never a study result;
 - scenarios from a shared warm-up.
 
 ## How it works
