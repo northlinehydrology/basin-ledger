@@ -1,0 +1,48 @@
+"""Area maps move depth rates between SWAT+ objects and MODFLOW 6 cells without gaining or losing volume."""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from basinledger.mapping import AreaMap
+
+
+def two_aquifers():
+    # 4 cells of 100 m2; aquifer a covers cells 0, 1 and half of 2; aquifer b the other half of 2 and cell 3
+    cell_area = np.full(4, 100.0)
+    m = AreaMap(["a", "b"], np.array([0, 0, 0, 1, 1]), np.array([0, 1, 2, 2, 3]),
+                np.array([100.0, 100.0, 50.0, 50.0, 100.0]))
+    return m, cell_area
+
+
+def test_volume_is_kept():
+    m, cell_area = two_aquifers()
+    rate = np.array([0.002, 0.005])  # m d-1
+    cells = m.to_cells(rate, cell_area)
+    assert np.sum(cells * cell_area) == pytest.approx(m.volume(rate), rel=1e-15)
+    assert cells[2] == pytest.approx((0.002 * 50 + 0.005 * 50) / 100)
+    assert m.mapped_area().tolist() == [250.0, 150.0]
+
+
+def test_over_covered_cell_is_refused():
+    m, cell_area = two_aquifers()
+    m.area[2] = 80.0  # cell 2 now 130 m2 of 100
+    with pytest.raises(ValueError, match="cell 2"):
+        m.check(cell_area)
+
+
+def test_area_must_match_the_source_model_when_asked():
+    m, cell_area = two_aquifers()
+    m.check(cell_area, np.array([250.0, 150.0]), rtol=1e-3)
+    with pytest.raises(ValueError, match="b: mapped area"):
+        m.check(cell_area, np.array([250.0, 200.0]), rtol=1e-3)
+
+
+def test_from_csv(tmp_path):
+    f = tmp_path / "map.csv"
+    f.write_text("object,layer,row,col,area_m2\na,0,0,1,100\nb,0,1,0,40\n")
+    m = AreaMap.from_csv(f, ["a", "b"], lambda l, r, c: r * 2 + c)
+    assert m.node.tolist() == [1, 2] and m.obj.tolist() == [0, 1]
+    with pytest.raises(KeyError):
+        AreaMap.from_csv(f, ["a"], lambda l, r, c: 0)
