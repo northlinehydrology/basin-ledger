@@ -11,7 +11,8 @@ The engine's test case. It wires real models, but the place and the numbers mean
 - **Water user:** the synthetic user (`basinledger.testing.SyntheticUser`, `user.toml`), hourly. It withdraws about
   520 m³ a day from well `pw1`, with daily and seasonal cycles. 70% is consumed, and the rest plus a 1% gain goes to
   an outfall account. It also reports a dissolved solids load and electricity.
-- **Not calibrated:** none of it is. This is not a screening run of anything.
+- **Calibration:** none, and no record, so the engine labels it a screening run. Its objects keep their SWAT+
+  names; it has no hydrofabric.
 
 Run it:
 
