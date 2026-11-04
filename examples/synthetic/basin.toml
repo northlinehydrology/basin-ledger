@@ -1,0 +1,32 @@
+name = "synthetic"
+description = """SWAT+'s Osu_1hru example (10 ha, 2010-2023) gives the daily recharge rate for a small synthetic aquifer
+in MODFLOW 6. A synthetic water user pumps from one well and returns to an outfall. For the engine's tests only:
+the places and numbers mean nothing."""
+
+[run]
+folder = "../../runs/synthetic"
+
+[swatplus]
+project = "{swatplus_refdata}/Osu_1hru"
+
+[modflow6]
+builder = "model:build"
+model = "gwf"
+
+[recharge]
+package = "rch"
+# Osu_1hru's one aquifer is 10 ha; its recharge rate is spread over the whole 4.2 km2 grid. A real example maps
+# areas that match (area_rtol), from the same geography.
+map = "all:aqu001"
+
+[[wells]]
+name = "pw1"
+package = "wel"
+cell = [0, 20, 28]
+
+[[users]]
+name = "plant"
+component = "basinledger.testing:SyntheticUser"
+config = "user.toml"
+withdrawal = "well:pw1"
+return = "outfall:creek"
