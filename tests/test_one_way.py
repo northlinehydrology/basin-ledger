@@ -21,7 +21,7 @@ DAYS = 3 * 365 + 1
 
 def osu_printing_aquifers(refdata, dest):
     """Osu_1hru for 2010-2012 only, with the aquifer's daily output on from the first day (no other change).
-    SWAT+ then ends with the run, so it completes its output files (a run stopped early leaves them unwritten)."""
+    SWAT+ reads print.prt's rows by position unless object labels are on, so labels are turned on."""
     if dest.exists():
         shutil.rmtree(dest)
     shutil.copytree(refdata / "Osu_1hru", dest)
