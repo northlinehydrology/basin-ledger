@@ -28,6 +28,9 @@ Paths are relative to the config file. ``{swatplus_refdata}`` stands for the exa
     package = "wel"
     cell = [0, 20, 30]                  # layer, row, col (0-based)
 
+    [calibration]                       # optional: the example's calibration record
+    record = "calibration/record.toml"  # without one, the example is a screening run
+
     [[users]]
     name = "plant"
     component = "basinledger.testing:SyntheticUser"
@@ -86,10 +89,17 @@ class ExampleConfig:
     area_rtol: float | None
     wells: list[WellConfig]
     users: list[UserConfig]
+    calibration_record: Path | None = None
 
     @property
     def folder(self) -> Path:
         return self.path.parent
+
+    @property
+    def calibration_status(self) -> str:
+        """'calibrated' or 'screening' (no record, or a record that doesn't say calibrated)."""
+        from .calibration import record_status
+        return record_status(self.calibration_record)
 
 
 def _path(base: Path, p: str) -> Path:
@@ -103,7 +113,7 @@ def load(path: str | Path) -> ExampleConfig:
     with open(path, "rb") as f:
         c = tomllib.load(f)
     base = path.parent
-    known = {"name", "description", "run", "swatplus", "modflow6", "recharge", "wells", "users"}
+    known = {"name", "description", "run", "swatplus", "modflow6", "recharge", "wells", "users", "calibration"}
     if set(c) - known:
         raise ValueError(f"{path}: unknown sections {sorted(set(c) - known)}")
     mf = c.get("modflow6", {})
@@ -130,4 +140,5 @@ def load(path: str | Path) -> ExampleConfig:
         area_rtol=rch.get("area_rtol"),
         wells=[WellConfig(w["name"], w.get("package", "wel"), tuple(w["cell"])) for w in c.get("wells", [])],
         users=users,
+        calibration_record=_path(base, c["calibration"]["record"]) if c.get("calibration", {}).get("record") else None,
     )

@@ -40,6 +40,7 @@ def _builder(cfg: C.ExampleConfig):
 class Basin:
     def __init__(self, cfg: C.ExampleConfig, run: str = "base", users: bool = True, days: int | None = None):
         self.cfg = cfg
+        self.status = cfg.calibration_status  # 'screening' unless the example's record says 'calibrated'
         self.folder = cfg.run_folder / run
         if self.folder.exists():
             shutil.rmtree(self.folder)
