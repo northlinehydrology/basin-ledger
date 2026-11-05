@@ -68,7 +68,7 @@ Kept current at each commit so the work can be resumed from this file alone. Las
 ## Resume
 
 ```bash
-cd ~/repos/basin-ledger
+cd ~/repos/basinledger
 uv sync --group gis --group examples
 uv run python examples/plaster-creek/groundwater/rerun_nextgen.py           # only if the cache is gone
 uv run --group gis python examples/plaster-creek/groundwater/fetch.py       # skips cached files

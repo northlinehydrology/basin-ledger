@@ -118,7 +118,7 @@ On utility water, the campus's water is Lake Michigan water through Wyoming's pl
 pip install "basinledger[users,nextgen]"
 ```
 
-Then, from a checkout of github.com/northlinehydrology/basin-ledger:
+Then, from a checkout of github.com/northlinehydrology/basinledger:
 1. Build NextGen's run with nextgen-michigan (Docker).
 2. Run `examples/plaster-creek/groundwater/rerun_nextgen.py`, `fetch.py` and `prepare.py`.
 3. Run `examples/plaster-creek/demo.py`.

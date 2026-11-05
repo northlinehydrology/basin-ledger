@@ -51,7 +51,7 @@ def data_dir() -> Path:
 
 
 def _get(url: str, dest: Path, timeout: int = 180):
-    req = urllib.request.Request(url, headers={"User-Agent": "basinledger (github.com/northlinehydrology/basin-ledger)"})
+    req = urllib.request.Request(url, headers={"User-Agent": "basinledger (github.com/northlinehydrology/basinledger)"})
     with urllib.request.urlopen(req, timeout=timeout) as r, open(dest, "wb") as f:
         f.write(r.read())
 

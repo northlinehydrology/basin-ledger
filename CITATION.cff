@@ -17,7 +17,7 @@ identifiers:
     value: 10.5281/zenodo.23967792
     description: "Version 0.1.0"
 license: BSD-3-Clause
-repository-code: "https://github.com/northlinehydrology/basin-ledger"
+repository-code: "https://github.com/northlinehydrology/basinledger"
 keywords:
   - hydrology
   - groundwater-surface water interaction

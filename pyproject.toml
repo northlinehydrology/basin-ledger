@@ -35,10 +35,10 @@ users = ["waterledger-models>=3.9", "pyyaml>=6"]
 nextgen = ["netCDF4>=1.6,<1.7.5"]
 
 [project.urls]
-Homepage = "https://github.com/northlinehydrology/basin-ledger"
-Documentation = "https://github.com/northlinehydrology/basin-ledger/blob/main/docs/design.md"
-Issues = "https://github.com/northlinehydrology/basin-ledger/issues"
-Changelog = "https://github.com/northlinehydrology/basin-ledger/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/northlinehydrology/basinledger"
+Documentation = "https://github.com/northlinehydrology/basinledger/blob/main/docs/design.md"
+Issues = "https://github.com/northlinehydrology/basinledger/issues"
+Changelog = "https://github.com/northlinehydrology/basinledger/blob/main/CHANGELOG.md"
 DOI = "https://doi.org/10.5281/zenodo.23967791"
 
 [project.scripts]

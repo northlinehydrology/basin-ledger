@@ -2,8 +2,8 @@
 
 [![PyPI](https://img.shields.io/pypi/v/basinledger)](https://pypi.org/project/basinledger/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23967791.svg)](https://doi.org/10.5281/zenodo.23967791)
-[![test](https://github.com/northlinehydrology/basin-ledger/actions/workflows/test.yml/badge.svg)](https://github.com/northlinehydrology/basin-ledger/actions/workflows/test.yml)
-[![nightly](https://github.com/northlinehydrology/basin-ledger/actions/workflows/nightly.yml/badge.svg)](https://github.com/northlinehydrology/basin-ledger/actions/workflows/nightly.yml)
+[![test](https://github.com/northlinehydrology/basinledger/actions/workflows/test.yml/badge.svg)](https://github.com/northlinehydrology/basinledger/actions/workflows/test.yml)
+[![nightly](https://github.com/northlinehydrology/basinledger/actions/workflows/nightly.yml/badge.svg)](https://github.com/northlinehydrology/basinledger/actions/workflows/nightly.yml)
 
 A basin's water, quantity and quality, balanced day by day across coupled models.
 
@@ -106,7 +106,7 @@ Two model programs aren't Python packages, and come separately:
 From a source checkout, for development and the tests, with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-git clone https://github.com/northlinehydrology/basin-ledger && cd basin-ledger
+git clone https://github.com/northlinehydrology/basinledger && cd basinledger
 uv sync
 uv run python examples/synthetic/fetch.py --get     # builds SWAT+ (swatplus-bmi build) and fetches libmf6 (get-modflow)
 uv run pytest                                       # about a minute on one core; -m "not slow" takes about 10 s
@@ -177,7 +177,7 @@ head_min = 88.3
 limit = 0.002
 ```
 
-![Drawdown in the synthetic example](https://raw.githubusercontent.com/northlinehydrology/basin-ledger/main/docs/figures/synthetic-drawdown.png)
+![Drawdown in the synthetic example](https://raw.githubusercontent.com/northlinehydrology/basinledger/main/docs/figures/synthetic-drawdown.png)
 
 *The synthetic example: SWAT+'s Osu_1hru recharge drives a small MODFLOW 6 aquifer, and a synthetic user pumps one
 well. Drawdown is the difference from the same run without the user.*
