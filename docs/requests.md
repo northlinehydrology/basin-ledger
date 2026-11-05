@@ -7,11 +7,16 @@ what, why, and how Basin Ledger copes until then. Written Nov 4, 2026.
 
 1. **Declare pyyaml as a dependency (a bug in 3.9.0).** `waterledger_models/datacenter/bmi.py` imports `yaml`, but
    pyyaml isn't among the package's dependencies, so `from waterledger_models.datacenter.bmi import CoolingWaterBmi`
-   fails in a clean environment. Until fixed, Basin Ledger's dev group installs pyyaml.
+   fails in a clean environment. Until fixed, Basin Ledger's dev group installs pyyaml. *Status: fixed for 3.10.0
+   (yaml is imported only when a YAML config file is read). The workaround stays until 3.10.0 is on PyPI.*
 2. **A withdrawal limit input on every user component:** `water_user_water__withdrawal_volume_flux_limit` (m3 s-1;
    infinity means no limit). Curtailment and well drawdown rules set it before each day. `CoolingWaterBmi` should
    meet a limit the way a campus would: by running dry or with more assist, using more electricity. Its balance must
    still close, and the electricity must follow. Until then, rules can only be tested on the synthetic user.
+   *Status (requests 2 to 4): proposed for the release after 3.10.0, pending Andrew's decision. The design: a limit
+   caps the wet share of heat rejected each step and re-solves the heat balance, so electricity rises as the plant
+   runs drier, and a limit of 0 is dry mode. Return load = intake concentration × (withdrawal − evaporation − drift's
+   share).*
 3. **A dry-mode input on `CoolingWaterBmi`**, for days a rule calls for no evaporative cooling. It may be the same
    mechanism as the limit, with a limit of zero for cooling water.
 4. **Intake concentrations and return loads.** For quality balances, a user needs the concentration of what it takes
@@ -28,6 +33,8 @@ what, why, and how Basin Ledger copes until then. Written Nov 4, 2026.
    between steps (ponds, tailings), so scenarios can start from a shared warm-up.
 
 ## swatplus-bmi
+
+*Status: requests 1 to 4 are planned for swatplus-bmi 0.2.0.*
 
 1. **HRU percolation (recharge) per HRU**, for mapping recharge to cells by HRU area as Bailey et al. (2025) do. Today
    only aquifer recharge is exposed, and SWAT+'s aquifers are lumped per subbasin.
@@ -52,4 +59,5 @@ A second note for the swatplus-bmi docs: in print.prt, SWAT+ reads object rows b
 second value under `csvout dbout cdfout`) is `y`. Osu_1hru's rows aren't in the order SWAT+ reads them, so turning on
 one object's daily output by editing its row does nothing unless labels are on. swatplus-bmi's tests turn everything
 on, which hides this. (An earlier version of this file reported daily outputs missing after an early stop. That was
-this issue. A run stopped early writes its daily outputs in full.)
+this issue. A run stopped early writes its daily outputs in full.) *Done in 0.1.1:
+`swatplus_bmi.project.set_print` turns labels on and edits rows by name, and Basin Ledger's tests use it.*
