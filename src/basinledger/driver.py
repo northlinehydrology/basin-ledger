@@ -111,7 +111,8 @@ class Basin:
             ws = self.folder / "mf6"
             if cfg.mf6_builder:
                 _example_function(cfg, cfg.mf6_builder, "build")(ws, self.days - self.day,
-                                                                 self.start + dt.timedelta(days=self.day))
+                                                                 self.start + dt.timedelta(days=self.day),
+                                                                 **cfg.mf6_builder_args)
             elif saved:
                 remaining_simulation(cfg.mf6_workspace, ws, self.day)
             else:

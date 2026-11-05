@@ -20,6 +20,7 @@ Paths are relative to the config file. ``{swatplus_refdata}`` stands for the exa
 
     [modflow6]                          # optional: the groundwater model
     builder = "model:build"             # model.py beside this file: build(workspace, days, start_date)
+    builder_args = {}                   # optional keyword arguments for the builder (a scenario's variant)
     # workspace = "mf6"                 # or an existing simulation folder, copied into the run
     model = "gwf"
 
@@ -146,6 +147,7 @@ class ExampleConfig:
     outputs: dict = field(default_factory=dict)
     nextgen_run: Path | None = None
     rivers: dict | None = None
+    mf6_builder_args: dict = field(default_factory=dict)
 
     @property
     def surface(self) -> str:
@@ -225,4 +227,5 @@ def load(path: str | Path) -> ExampleConfig:
         outputs=c.get("outputs", {}),
         nextgen_run=_path(base, c["nextgen"]["run"]) if "nextgen" in c else None,
         rivers=c.get("rivers"),
+        mf6_builder_args=mf.get("builder_args", {}),
     )
