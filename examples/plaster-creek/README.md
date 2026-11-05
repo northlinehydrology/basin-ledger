@@ -1,28 +1,34 @@
 # Plaster Creek
 
-Plaster Creek above USGS 04119055 (Plaster Creek at 28th Street, Kentwood, Kent County, Michigan): 124 km², 16
-catchments of the NextGen hydrofabric v2.2. This is Basin Ledger's first example on a calibrated model.
+## Summary
 
-## What runs
+Plaster Creek above USGS 04119055 (Plaster Creek at 28th Street, Kentwood, Kent County, Michigan) drains 124 km² in 16
+catchments of the NextGen hydrofabric v2.2. The example runs three parts.
 
-- **Streamflow: NextGen, calibrated.**
-  - The model: NextGen In A Box v2.1.0 with Noah-OWP-Modular and CFE in every catchment, NWM v3 retrospective
-    forcing (October 2018 to December 2022), and t-route.
-  - The calibration: two stages, from [nextgen-michigan](https://github.com/northlinehydrology/nextgen-michigan)
-    (its `docs/calibration.md`).
-  - Basin Ledger replays the finished run one day at a time (`coupling/nextgen.py`). Flows are reported for every
-    flowpath (`wb-`) and nexus (`nex-`).
-- **A water user: an assumed 300 MW tower-cooled campus** in catchment `cat-652066` [A].
-  - `CoolingWaterBmi` from `waterledger-models` steps it hourly on the same forcing NextGen used: that catchment's
-    2 m temperature and humidity.
-  - It is on utility water from outside the basin, and its wastewater is treated outside the basin. The stream sees
-    neither. The utility's 10% distribution losses are an assumption [A].
-- **Groundwater:** a screening MODFLOW 6 model, in its own configs (below). There is no water quality yet.
+- **Streamflow:** a calibrated NextGen run, replayed one day at a time (`coupling/nextgen.py`). The model is
+  NextGen In A Box v2.1.0 with Noah-OWP-Modular and CFE in every catchment, NWM v3 retrospective forcing (October
+  2018 to December 2022) and t-route. Its calibration is from
+  [nextgen-michigan](https://github.com/northlinehydrology/nextgen-michigan) (`docs/calibration.md` there).
+- **A water user:** an assumed 300 MW tower-cooled campus in catchment `cat-652066` [A]. `CoolingWaterBmi` from
+  `waterledger-models` steps it hourly on that catchment's 2 m temperature and humidity.
+- **Groundwater:** a screening MODFLOW 6 model in `groundwater/`. Its recharge is CFE's daily percolation. Its river
+  stages follow t-route's depth.
 
-## What is calibrated, and what isn't
+The campus runs two ways. In `basin.toml` and `groundwater.toml` it takes utility water from outside the basin. In
+`groundwater-wells.toml` it pumps its own well 500 m from the nearest stream cell [A].
 
-The calibration record is `calibration/record.toml`. The example's status is `calibrated` because the one hydrologic
-model it runs is calibrated. That covers streamflow at the gage only.
+## What it shows
+
+On utility water the creek sees nothing. The water comes from Lake Michigan and returns to the Grand River through
+Wyoming's plant. On its own well the campus lowers the gage's 7-day low flow by 43 L/s (27%) in the driest year
+(2021-22) and by 42 L/s (20%) in the median year (2020-21). Days below Q90 go from 48 to 62 in the driest year and
+from 49 to 73 in the median year.
+
+MODFLOW 6 takes 63% of the pumping from streams and seepage in the last year. Glover's method gives 89% with
+nextgen-michigan's settings and 78% with MODFLOW 6's aquifer properties at the well. Streambed conductance moves the
+answer most. The full results are in [docs/plaster-creek-demo.md](../../docs/plaster-creek-demo.md).
+
+Streamflow at the gage is calibrated:
 
 | | Calibration (2019-10-01 to 2021-05-16) | Validation (to 2022-12-31) |
 |---|---|---|
@@ -31,49 +37,37 @@ model it runs is calibrated. That covers streamflow at the gage only.
 | log NSE | 0.74 / 0.762 | 0.63 / 0.672 |
 | bias | 0% / −0.5% | +11% / +11.7% |
 
-"Published" is nextgen-michigan's figure, computed against USGS approved daily values. "Recomputed" is
-`check_calibration.py`, run from the replayed run against the instantaneous record ngiab-cal downloaded, averaged to
-calendar days. A test checks that the record and a fresh recomputation agree. The two sets differ by up to 0.06 in
-validation NSE, most likely because the observations differ: approved daily values, against means of instantaneous
-values.
+"Published" is nextgen-michigan's figure against USGS approved daily values. "Recomputed" is `check_calibration.py`
+against the instantaneous record averaged to calendar days. A test checks that the record and a fresh recomputation
+agree. The record is `calibration/record.toml`.
 
-Not calibrated, or only approximately:
+## What Basin Ledger measures
 
-- **Low flow is approximate.** The model's 7-day low flows are 8–18% below observed in 2020–2022.
-- **The headwaters are ungaged.** The calibration is for the gage. Every catchment has one parameter set, and the
-  campus sits in a small catchment with no record.
-- **The campus is assumed.** Its size, cooling design and utility losses are assumptions [A], not a proposal, and
-  are not calibrated.
-- **Groundwater and water quality are screening.** A MODFLOW 6 model, if added, and any water quality stay screening
-  until calibrated, to Michigan well records and to the Plaster Creek TMDL data (E. coli, sediment and biota).
-- **Four years of weather** include no drought of record.
+- Daily flow and depth on every flowpath (`wb-`) and nexus (`nex-`), keyed to hydrofabric ids so they compare
+  directly with the National Water Model.
+- The campus's withdrawal, consumption, return and electricity, hourly, integrated by day.
+- The utility chain: water produced for the campus at the plant, including distribution losses.
+- Heads in every MODFLOW 6 cell, and the exchange with each river cell, gross and net.
+- Streamflow depletion by reach, and the share of pumping taken from streams and seepage.
+- Low-flow measures at the gage: 7-day low flow and days below Q90.
+- The water balance of every model and every transfer between them. The ledger closes every day.
 
-## What it shows, and what it doesn't yet
+## Limitations
 
-- **The engine runs on a calibrated model on NextGen geography.** Results are keyed to hydrofabric ids, so the gage
-  flow (`flow:wb-652056`) compares directly with the National Water Model. The campus's hourly withdrawal,
-  consumption, return and electricity are integrated by day, and the ledger closes every day.
-- **A replay has no feedback.** The campus on utility water changes nothing in the stream, so the replay is exact for
-  this case. A user that takes from or returns to the creek would need NextGen to see it. nextgen-michigan does that
-  inside the NextGen run, with its WaterUsers component. Replaying those scenario runs, and comparing them with this
-  baseline in the ledger, is the next step.
-- **MODFLOW 6 is screening.** Its recharge comes from a rerun of NextGen with CFE's percolation in its outputs
-  (`groundwater/rerun_nextgen.py`). Streamflow in the rerun is identical to the calibrated run.
+- **Groundwater is screening.** Steady heads match 55 Wellogic drift wells with an RMSE of 7.9 m (mean error
+  +1.9 m, a 66 m range). Mean base flow is within 4% of the base flow separated from the gage record. It is too
+  steady: 76–93% high on days of below-median flow.
+- **Low flow is approximate.** The calibrated model's 7-day low flows are 8–18% below observed in 2020–2022.
+  Depletion percentages are shares of the model's low flow.
+- **The headwaters are ungaged.** Every catchment has one parameter set, and the campus sits in a small catchment with
+  no record.
+- **The campus is assumed.** Its size, cooling design, utility losses and well site are assumptions [A].
+- **A replay has no feedback.** NextGen doesn't see the well. Depletion is taken off its flows afterward.
+- **No water quality.** The SWAT+ surface that would carry it doesn't exist yet for Plaster Creek.
+- **Four years of weather.** The run includes no drought of record such as 2012.
+- **Existing pumping isn't included.** EGLE's facility-level water use has no locations [A].
 
-## Groundwater (screening) and the demo
-
-A MODFLOW 6 model under the same calibrated surface is in `groundwater/`. Its configs are `groundwater.toml` (the
-campus on utility water) and `groundwater-wells.toml` (the campus on its own well).
-- Its recharge is CFE's daily percolation, from a NextGen rerun with that flux in its outputs.
-- Its river stages follow t-route's depth.
-- It is built from public data (USGS 3DEP and SIM 3392, Michigan geology, Wellogic) and isn't fitted yet. See
-  `groundwater/README.md` for the methods and the fit.
-
-`demo.py` answers one question with it: the campus on its own well against utility water, in the median and the
-driest year, and Glover's method against the coupled model. The results page is
-[docs/plaster-creek-demo.md](../../docs/plaster-creek-demo.md). Progress and resume steps are in `PROGRESS.md`.
-
-## Run it
+## Run
 
 ```bash
 uv run python examples/plaster-creek/fetch.py              # checks for the NextGen run; says how to build it
@@ -81,5 +75,6 @@ uv run python examples/plaster-creek/check_calibration.py  # the fit at the gage
 uv run python -m basinledger run examples/plaster-creek/basin.toml
 ```
 
-The NextGen run isn't in this repository. It's built by nextgen-michigan (Docker, a few hours), and
-`$NEXTGEN_MICHIGAN` points to that checkout.
+The NextGen run isn't in this repository. nextgen-michigan builds it (Docker, a few hours), and `$NEXTGEN_MICHIGAN`
+points to that checkout. The groundwater model and the demo are built by the steps in `groundwater/README.md`.
+Progress and resume steps are in `PROGRESS.md`.
