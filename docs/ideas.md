@@ -140,3 +140,47 @@ Township.
 4. **Utility well fields are pumping users.** Many Michigan utilities pump their own wells inside the basin. A utility's
    wells are treated as a generic user, with reported withdrawals (EGLE, SDWIS sources) at its well locations. A campus
    on such a utility then shows up in the groundwater through the utility's added pumping on its peak days.
+
+## 9. HEC-RAS (1D and 2D) and HEC-HMS as BMI components (not decided, November 5, 2026)
+
+Andrew's view: building BMI wrappers for them is worth it in itself, as a demonstration of the work. No maintained
+BMI exists for either.
+
+1. **Why.**
+   - These are the models engineering firms, FEMA studies and municipal stormwater reviews use.
+   - Basin Ledger's scenarios driving an existing HMS or RAS model matters for subconsultant work and for
+     credibility with reviewers.
+   - Both are public domain (USACE).
+2. **RAS 2D is the most interesting.**
+   - **Floods and wet years:** overbank flow, floodplain storage, streets and parking. This is the wet-years regime
+     in section 2.
+   - **Rain on the mesh** (RAS 6, with curve-number or Green-Ampt infiltration), so a campus's new pavement and
+     detention show up as local flooding.
+   - **Plaster Creek** has a flooding history in Kentwood and Grand Rapids. A 2D flood scenario with and without the
+     campus could be checked against high-water marks and the gage's stage record.
+   - **RAS 1D** gives depth, velocity and wetted area at low flow (habitat and intakes). It also gives a better
+     stream stage for MODFLOW 6 than t-route's depth, and 1D water temperature for warm returns. RAS water quality is
+     1D only.
+3. **The wrapper pattern: saved-state stepping,** the same idea as swatplus-bmi's snapshots.
+   - **RAS:** unsteady plans write restart files and hot-start from them. `update()` runs one interval from the last
+     restart. `get_value` and `set_value` read and write the HDF5 results and the boundary conditions: inflows from
+     Basin Ledger, stage to MODFLOW 6.
+   - **HMS:** save and start states on simulation runs, driven through its Jython scripting.
+   - **Cost:** there is a restart overhead each step. That's fine for daily steps through events and wet seasons, and
+     slow for 30 years of 2D. 2D would run on events and wet periods, with SWAT+, NextGen or 1D covering the long runs.
+   - **Python tools:** rashdf and ras-commander for HDF5 and plan handling. RAS 6 has Linux solvers.
+4. **Questions to check before building:**
+   - **Meshes:** building a 2D mesh and geometry probably needs RAS Mapper (Windows). That would be a one-time Windows
+     step, with the wrapper and the runs on Linux.
+   - **Restarts:** what the restart files carry, and whether a hot start reproduces an unbroken run bit for bit (the
+     same test as swatplus-bmi's).
+   - **HMS:** whether state saving works through Jython on Linux.
+   - **Inputs:** 3DEP 1 m lidar for Michigan, roughness from NLCD, and calibration to high-water marks and gage stage.
+5. **A possible order:**
+   1. swatplus-bmi 0.2.0;
+   2. the Plaster Creek groundwater calibration;
+   3. a hecras-bmi wrapper on one reach in 1D, proving restart stepping;
+   4. RAS 2D on Plaster Creek's flood-prone reach;
+   5. HMS, mainly as an event comparison against Calvin University's existing Plaster Creek HMS model (to confirm).
+
+   Each wrapper would likely be its own repository, like swatplus-bmi, with Basin Ledger using it.
