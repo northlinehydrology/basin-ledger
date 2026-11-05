@@ -15,6 +15,8 @@ from basinledger import config as C
 from basinledger.driver import Basin
 from conftest import ROOT, RUNS
 
+pytestmark = pytest.mark.slow
+
 DAYS = 730
 DAY = 86400.0
 

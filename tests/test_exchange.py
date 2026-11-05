@@ -15,6 +15,8 @@ from basinledger.coupling import swatplus as S
 from basinledger.driver import Basin
 from conftest import ROOT, RUNS
 
+pytestmark = pytest.mark.slow
+
 DAYS = 1096
 
 

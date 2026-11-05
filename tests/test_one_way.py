@@ -16,6 +16,8 @@ import pytest
 from basinledger.driver import Basin
 from conftest import synthetic_config
 
+pytestmark = pytest.mark.slow
+
 DAYS = 3 * 365 + 1
 
 

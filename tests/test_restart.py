@@ -9,6 +9,8 @@ from basinledger import config as C
 from basinledger.driver import Basin
 from conftest import ROOT, RUNS
 
+pytestmark = pytest.mark.slow
+
 
 def config(name):
     cfg = C.load(ROOT / "examples" / "synthetic" / name)
