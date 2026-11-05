@@ -126,6 +126,27 @@ uv run --group gis --group examples python -W ignore examples/plaster-creek/grou
 uv run --group gis pytest -q -m "not slow"
 ```
 
+## Water quality data at the outlet (checked November 5, 2026)
+
+Sediment, nitrogen and phosphorus, for calibrating SWAT+ beyond streamflow:
+
+- **Water Quality Portal:** 3,554 results from 106 Plaster Creek sites (USGS, EGLE, MiCorps).
+  - Nearly all are E. coli: 2,702 results, from 2001-2004 and 2014-2019.
+  - At USGS 04119055 there are only three sample dates (May and June 2017): turbidity, total solids, conductance
+    and organics.
+  - There is no time series of TSS, suspended sediment, nitrogen or phosphorus.
+- **The gage:** it measures stage and discharge only. There are no continuous water-quality sensors.
+- **Other sources, not in WQP:**
+  - The 2002 biota (sediment) TMDL. Its target is 30 mg/L TSS, as reported in a Calvin watershed report; to be
+    verified in the TMDL itself.
+  - LGROW's 2010 summary sheet gives loads of about 16,000 lb/yr phosphorus and 89,000 lb/yr nitrogen. These are
+    probably model estimates, not measurements.
+  - Plaster Creek Stewards (Calvin) and GVSU's Annis Water Resources Institute may hold monitoring data. Worth
+    asking.
+- **For a demo:** water quality would be soft-calibrated or screening only. That means checking SWAT+ loads against
+  the TMDL target, LGROW's loads and USGS SPARROW yields. A real calibration needs data from the Stewards or GVSU, or
+  a sampling campaign.
+
 ## Open questions
 
 - **Base flow too flat.** The model's base flow is too damped: it is about double the separated value in late summer,
