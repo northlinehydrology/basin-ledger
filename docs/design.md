@@ -379,16 +379,20 @@ exchange replaces SWAT+'s aquifer return flow.
 - **Per channel, net.** The exchange on day *d* is summed per SWAT+ channel through the channel map (`all:<channel>`,
   or a CSV of RIV cells by channel). The driver adds one point source (`gw_<channel>`) and one place of use
   (`seep_<channel>`) per coupled channel to the run's copy of the project.
-- **Gaining reaches.** A net discharge to the stream enters the channel as a point source on day *d*+1.
-- **Losing reaches.** A net leakage from the stream is taken from the channel on day *d*+1 as a water allocation
-  demand. A negative point source would not work: SWAT+ 62.0.1 records a negative point source in full even when the
-  channel can't supply it.
+- **Into SWAT+.** Since swatplus-bmi 0.2.0, the day's net exchange is set directly as the channel's groundwater
+  exchange (`channel_water__groundwater_volume_exchange_rate`) on day *d*+1. A gain joins the channel's inflow before
+  routing. A loss comes out of the day's outflow, no more than is there, and counts as SWAT+'s channel seepage, so
+  SWAT+'s channel balance closes. The ledger enters what SWAT+ reports it actually exchanged.
+  - Before 0.2.0, the exchange went through one point source and one water allocation place of use per channel.
+  - A negative point source would not work: SWAT+ 62.0.1 records it in full even when the channel can't supply it.
 - **Shortfalls.** Where the channel can't supply a losing reach's demand, the shortfall is entered in the ledger. That
   is water MODFLOW 6 took from a stream that, in SWAT+, wasn't there. In the synthetic two-way example it is 186 m³
   over three years, against about 61,000 m³ of exchange. The next step is to lower the reach's stage for the next day
   when it happens.
-- **Stage.** MODFLOW 6's river stage is fixed in its input for now. Taking it from SWAT+'s channel on day *d*−1 needs
-  channel depth through BMI, which is a request to swatplus-bmi.
+- **Stage.** With `[rivers] stage = "surface_depth"`, MODFLOW 6's river stage on day *d* is the river bottom plus
+  the bed thickness plus SWAT+'s channel depth for day *d* (`channel_water__depth`, on SWAT+'s rating curve,
+  swatplus-bmi 0.2.0). Otherwise it is fixed in the input. Under a NextGen replay the same setting uses t-route's
+  depth.
 - **Timing.** The exchange is explicit with a one-day lag. Volume is conserved (ledger pairs): each day's exchange is
   due in SWAT+ the next day, and the last day's is reported as in transit. Timing shifts by a day, which is small
   against the time scales of groundwater response. Iterating within the day by branching SWAT+

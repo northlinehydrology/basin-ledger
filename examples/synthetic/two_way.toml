@@ -20,6 +20,10 @@ area_rtol = 1e-6          # the grid is exactly Osu_1hru's 10 ha aquifer
 package = "riv"
 map = "all:cha01"
 
+# River stage stays fixed (88 m) so the example exercises losing reaches as well as gaining ones. With
+# [rivers] stage = "surface_depth" it would follow SWAT+'s channel depth (swatplus-bmi 0.2.0); Osu_1hru's channel is
+# centimeters deep, so the reach would only gain (tests/test_exchange.py, test_stage_from_swat_depth).
+
 [[wells]]
 name = "pw1"
 cell = [0, 5, 6]
