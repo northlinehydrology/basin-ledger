@@ -1,6 +1,6 @@
 [project]
 name = "basinledger"
-version = "0.0.1"
+version = "0.1.0"
 description = "Basin Ledger: a basin's water, quantity and quality, balanced day by day across coupled models (SWAT+, MODFLOW 6, water users) through BMI."
 readme = "README.md"
 requires-python = ">=3.11"

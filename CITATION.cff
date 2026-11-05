@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+message: "If you use Basin Ledger in your work, please cite it as below."
+title: "Basin Ledger: a basin's water balanced day by day across coupled models (SWAT+, NextGen, MODFLOW 6 and water users) through BMI"
+type: software
+authors:
+  - family-names: Sommerlot
+    given-names: Andrew
+    affiliation: Northline Hydrology
+version: 0.1.0
+date-released: 2026-11-04
+license: BSD-3-Clause
+repository-code: "https://github.com/northlinehydrology/basin-ledger"
+keywords:
+  - hydrology
+  - groundwater-surface water interaction
+  - model coupling
+  - Basic Model Interface
+  - SWAT+
+  - MODFLOW 6
+  - NextGen
+  - water use
+references:
+  - type: software
+    title: "swatplus-bmi: stepping the SWAT+ watershed model one day at a time through the Basic Model Interface"
+    authors:
+      - family-names: Sommerlot
+        given-names: Andrew
+    doi: 10.5281/zenodo.23963201
+  - type: article
+    title: "The MODFLOW Application Programming Interface for simulation control and software interoperability"
+    authors:
+      - family-names: Hughes
+        given-names: Joseph D.
+      - name: "and others"
+    journal: "Environmental Modelling & Software"
+    volume: 148
+    year: 2022
+    doi: 10.1016/j.envsoft.2021.105257

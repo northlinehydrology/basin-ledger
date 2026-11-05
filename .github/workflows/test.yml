@@ -1,0 +1,34 @@
+# Build SWAT+ with the exchange mode (swatplus-bmi build), fetch MODFLOW 6's shared library (get-modflow) and run the
+# tests. The Plaster Creek tests need nextgen-michigan's NextGen run and are skipped here.
+
+name: test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fortran compiler (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gfortran
+      - name: Fortran compiler (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew list gcc >/dev/null 2>&1 || brew install gcc
+          echo "FC=$(ls "$(brew --prefix)"/bin/gfortran-* | sort -V | tail -1)" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked
+      - name: SWAT+ (swatplus-bmi build) and libmf6 (get-modflow)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: uv run python examples/synthetic/fetch.py --get
+      - run: uv run pytest -q
