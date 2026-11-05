@@ -8,6 +8,14 @@ authors:
     affiliation: Northline Hydrology
 version: 0.1.0
 date-released: 2026-11-04
+doi: 10.5281/zenodo.23967791
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23967791
+    description: "All versions (the concept DOI); cite this one"
+  - type: doi
+    value: 10.5281/zenodo.23967792
+    description: "Version 0.1.0"
 license: BSD-3-Clause
 repository-code: "https://github.com/northlinehydrology/basin-ledger"
 keywords:

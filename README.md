@@ -1,5 +1,10 @@
 # Basin Ledger
 
+[![PyPI](https://img.shields.io/pypi/v/basinledger)](https://pypi.org/project/basinledger/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23967791.svg)](https://doi.org/10.5281/zenodo.23967791)
+[![test](https://github.com/northlinehydrology/basin-ledger/actions/workflows/test.yml/badge.svg)](https://github.com/northlinehydrology/basin-ledger/actions/workflows/test.yml)
+[![nightly](https://github.com/northlinehydrology/basin-ledger/actions/workflows/nightly.yml/badge.svg)](https://github.com/northlinehydrology/basin-ledger/actions/workflows/nightly.yml)
+
 A basin's water, quantity and quality, balanced day by day across coupled models.
 
 The code was written with AI assistance (Claude, by Anthropic), designed and directed by Andrew Sommerlot. See
@@ -212,8 +217,9 @@ SWAT+MODFLOW) or use SWAT+'s own gwflow module. See [docs/prior-art.md](docs/pri
 
 ## Citing
 
-Cite the archived software (Zenodo; the DOI will be listed here once the first release is archived) and, where SWAT+
-is used, swatplus-bmi ([doi:10.5281/zenodo.23963201](https://doi.org/10.5281/zenodo.23963201)). Details in
+Cite the archived software, [doi:10.5281/zenodo.23967791](https://doi.org/10.5281/zenodo.23967791) (all versions;
+0.1.0 is [doi:10.5281/zenodo.23967792](https://doi.org/10.5281/zenodo.23967792)), and, where SWAT+ is used,
+swatplus-bmi ([doi:10.5281/zenodo.23963201](https://doi.org/10.5281/zenodo.23963201)). Details in
 [CITATION.cff](CITATION.cff).
 
 ## AI use
