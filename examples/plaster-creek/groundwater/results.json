@@ -1,0 +1,123 @@
+{
+  "model": {
+    "active_cells_per_layer": 4405,
+    "cell_m": 250.0,
+    "active_area_km2": 275.3125,
+    "layers": 3,
+    "river_cells": 358,
+    "choices": {
+      "grid": "250 m cells in EPSG:5070 (the hydrofabric's projection); active where a cell's center is within the 16 catchments plus a 2 km buffer [A]",
+      "top": "USGS 3DEP 1 arc-second land surface, averaged to each cell",
+      "layers": "3 layers, following SIR 2010-5109's scheme of glacial layers by depth (Table 3B): layer 1 the upper 30.5 m (100 ft) of drift; layer 2 the rest of the drift; layer 3 the upper 30 m of bedrock [A]. Each layer at least 1 m thick [A]",
+      "drift": "Quaternary sediment thickness from USGS SIM 3392 (Soller and Garrity 2018, 500 m, from 1:1,000,000 isopachs at 0, 50, 100, 200, 400 ft): regional only",
+      "glacial K": "by Farrand and Bell (1982) map unit at each cell's center, calibrated values from SIR 2010-5109 (Table 5-2); layer 2 the southern Lower Peninsula geometric mean (Table 9-1) [A]",
+      "bedrock K": "by Milstein (1987) subcrop formation, from SIR 2010-5109 (App. 4, Tables 5-1 and 5-2) [A where noted in BEDROCK]",
+      "storage": "specific yield 0.15 and specific storage 1e-5 per m in every layer [A]; transmissivity held at its value for the full layer thickness (ICELLTYPE 0) [A]",
+      "recharge": "CFE's daily percolation (SOIL_TO_GW_FLUX) by catchment, from the calibrated NextGen run; buffer cells take their nearest catchment's rate [A]",
+      "rivers": "RIV in every cell a hydrofabric flowpath crosses: streambed at the cell's lowest 30 m DEM value; bottom 1 m below it; conductance 0.3 m/d (bed K) x channel top width (hydrofabric TopWdth) x length in the cell / 1 m [A]; stage = streambed + the day's t-route depth",
+      "seepage": "DRN in every other layer-1 cell at land surface, conductance = layer 1 Kv x cell area / 1 m [A], so the water table can't rise above the land surface and discharges there (wetlands, unmapped streams)",
+      "edges": "GHB at the outer ring of active cells in layers 1 and 2, head from the water table interpolated from Wellogic drift wells (inverse distance, the 12 nearest) [A], conductance = Kh x thickness x 250 m / 250 m [A]",
+      "start": "steady state under the run's mean recharge and mean river depth",
+      "campus well": "one well in cat-652066, about 500 m from the nearest river cell (nextgen-michigan's Glover case) and nearest the catchment's center, screened in layer 2 [A]",
+      "existing pumping": "not included: EGLE's facility-level water use has no locations, and Wellogic's high-capacity wells have capacities, not withdrawals [A]"
+    }
+  },
+  "heads": {
+    "since_2000": {
+      "wells": 55,
+      "mean_error_m": 1.9353576198688618,
+      "mae_m": 5.088264532497985,
+      "rmse_m": 7.857090675731484,
+      "observed_range_m": 66.44639999999998,
+      "rmse_over_range": 0.11824704838383247
+    },
+    "all_dates": {
+      "wells": 740,
+      "mean_error_m": 3.293822872704073,
+      "mae_m": 5.15777146725571,
+      "rmse_m": 6.912102747276864,
+      "observed_range_m": 71.01839999999999,
+      "rmse_over_range": 0.09732833670255689
+    }
+  },
+  "baseflow": {
+    "alpha": 0.9781021897810219,
+    "bfi_max": 0.8,
+    "modflow6": "gross discharge to streams (aquifer to stream only); flooded rivers' losses to the aquifer are excluded, as separated base flow has none",
+    "calibration": {
+      "observed_flow_mean_m3s": 1.6955306412273052,
+      "separated_baseflow_mean_m3s": 0.9450805764522169,
+      "modflow6_discharge_mean_m3s": 0.9092341915194069,
+      "cfe_baseflow_mean_m3s": 0.9147957478877993,
+      "modflow6_net_discharge_mean_m3s": 0.7951063369692769,
+      "modflow6_vs_separated": {
+        "pbias": -3.7929448372937236,
+        "nse": 0.07512322471188793,
+        "log_nse": 0.003162996981373012,
+        "low_flow_days_pbias": 76.19996270127228
+      },
+      "cfe_vs_separated": {
+        "pbias": -3.204470530767353,
+        "nse": 0.6716666166223113
+      }
+    },
+    "validation": {
+      "observed_flow_mean_m3s": 1.548950577603569,
+      "separated_baseflow_mean_m3s": 0.7994060961357723,
+      "modflow6_discharge_mean_m3s": 0.8282068388324917,
+      "cfe_baseflow_mean_m3s": 0.8759804490565977,
+      "modflow6_net_discharge_mean_m3s": 0.6986230144546716,
+      "modflow6_vs_separated": {
+        "pbias": 3.6027674589846956,
+        "nse": -0.01377119682076633,
+        "log_nse": -0.24444958584392995,
+        "low_flow_days_pbias": 93.26718571652258
+      },
+      "cfe_vs_separated": {
+        "pbias": 9.578905301194986,
+        "nse": 0.6470137691092082
+      }
+    }
+  },
+  "balance": {
+    "max_daily_imbalance_share": {
+      "utility": 1.1421995608898569e-08,
+      "wells": 2.3617101234736737e-08
+    },
+    "ledger": "closed every day of both runs (the driver stops otherwise)"
+  },
+  "campus_wells": {
+    "well": {
+      "layer": 2,
+      "row": 70,
+      "col": 57,
+      "distance_to_river_cell_m": 500.0
+    },
+    "pumping_mean_m3s": 0.08523737493768438,
+    "pumping_max_day_m3s": 0.1065537577898216,
+    "drawdown_at_well_m": {
+      "end": 16.983331396425825,
+      "max": 20.51107926899448
+    },
+    "depletion_mean_m3s": 0.04306531393980667,
+    "depletion_last_year_m3s": 0.054011364970527456,
+    "depletion_share_of_pumping_last_year": 0.6332552191503932,
+    "gage_7day_low_flow_baseline_m3s": {
+      "2019": 0.169047121490751,
+      "2020": 0.21337400802544185,
+      "2021": 0.16119821582521712
+    },
+    "gage_7day_low_flow_with_wells_m3s": {
+      "2019": 0.1375565817724174,
+      "2020": 0.17162971015646392,
+      "2021": 0.11793571183696304
+    },
+    "change_mean_7day_low_flow_m3s": -0.03883244719185519,
+    "note": "the replayed NextGen flow less MODFLOW 6's depletion; t-route doesn't see the well",
+    "glover": {
+      "change_7day_low_flow_m3s": -0.026,
+      "baseline_7day_low_flow_m3s": 0.194,
+      "source": "nextgen-michigan docs/note.md: own wells, sewered wastewater; wells 500 m from the stream, T 500 m2/d, Sy 0.1 [A]; April 2019 to December 2022"
+    }
+  }
+}
