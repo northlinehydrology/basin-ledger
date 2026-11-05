@@ -65,6 +65,28 @@ builder (`basinledger.hydrofabric`, stubbed).
 - **swatplus-bmi 0.2.0** is planned in the swatplus-bmi session: channel depth for river stage, and recharge per HRU
   for mapping by area.
 
+## The SWAT+ project Andrew is building (November 5, 2026)
+
+What lets it plug straight into stages 1 to 3:
+
+- **SWAT+ 62.0.1**, the version swatplus-bmi supports, as a TxtInOut folder.
+- **The hydrofabric v2.2 catchments above USGS 04119055:** the 16 `cat-` divides in
+  `~/.cache/basinledger/plaster-creek/nextgen-recharge/config/plaster-cal_subset.gpkg`.
+  - Subbasins and routing units, one per catchment.
+  - One aquifer per catchment.
+  - Channels on the `wb-` flowpaths, with the same network.
+  - A lookup from SWAT+ object name to hydrofabric id (a CSV is enough), so maps and results key to the ids.
+- **Period:** at least October 2018 to December 2022, the NextGen run's period. Better from 2010, with a warm-up, so
+  2012 is included.
+- **Weather:** say which source. AORC is the plan; NWM v3 retrospective matches NextGen.
+- **Outlet:** the channel at the gage, so stage 1 fits streamflow there.
+- **Anything already set** (land use, soils, HRU thresholds, management) is noted, so the record can say so.
+- **Where to put it:** anywhere local. Basin Ledger copies the project into each run folder. If it's public data
+  only, it can live under `examples/plaster-creek/swatplus/` or be fetched by script.
+
+Once it's here: check that it runs through swatplus-bmi, build the aquifer-to-cell map from the lookup, and start
+stage 1.
+
 ## Next
 
 1. The SWAT+ project for Plaster Creek on the hydrofabric (the builder), then stage 1.
