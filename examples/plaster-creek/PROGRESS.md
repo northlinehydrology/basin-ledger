@@ -87,6 +87,19 @@ What lets it plug straight into stages 1 to 3:
 Once it's here: check that it runs through swatplus-bmi, build the aquifer-to-cell map from the lookup, and start
 stage 1.
 
+## swatplus-bmi 0.2.0 (November 5, 2026)
+
+- **Done (4d5e63c):** the two-way exchange uses 0.2.0's `channel_water__groundwater_volume_exchange_rate` when it's
+  installed, and enters what SWAT+ actually exchanged. River stage can come from the surface model's channel depth
+  (`[rivers] stage = "surface_depth"`). The point-source path stays for 0.1.x.
+- **Tested** against a 0.2.0 build in a scratch folder: the exchange and restart tests pass, and the totals match the
+  point-source path to the cubic meter.
+- **When 0.2.0 is on PyPI:**
+  1. require `swatplus-bmi>=0.2` and run `uv lock`;
+  2. rebuild SWAT+ (`uv run swatplus-bmi build --jobs 2`);
+  3. add `[rivers] stage = "surface_depth"` to `examples/synthetic/two_way.toml`;
+  4. note it in `docs/design.md`'s two-way section.
+
 ## Next
 
 1. The SWAT+ project for Plaster Creek on the hydrofabric (the builder), then stage 1.
