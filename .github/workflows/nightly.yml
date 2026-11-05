@@ -1,0 +1,38 @@
+# Nightly: the full suite, slow tests included, against the newest releases of the packages Basin Ledger depends on
+# (swatplus-bmi, waterledger-models, flopy, modflowapi, MODFLOW 6), resolved fresh instead of from uv.lock, so a break
+# upstream shows up here first. A failure is reported by GitHub's own workflow failure email.
+
+name: nightly
+
+on:
+  schedule:
+    - cron: "7 7 * * *"          # 07:07 UTC
+  workflow_dispatch:
+
+jobs:
+  latest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fortran compiler (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gfortran
+      - name: Fortran compiler (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew list gcc >/dev/null 2>&1 || brew install gcc
+          echo "FC=$(ls "$(brew --prefix)"/bin/gfortran-* | sort -V | tail -1)" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v5
+      - name: The newest releases of every dependency
+        run: |
+          uv sync --upgrade
+          uv pip list | grep -i -E "swatplus|waterledger|flopy|modflowapi|xmipy|netcdf4|numpy"
+      - name: SWAT+ (swatplus-bmi build) and the newest MODFLOW 6 (get-modflow)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: uv run python examples/synthetic/fetch.py --get
+      - run: uv run pytest -q
