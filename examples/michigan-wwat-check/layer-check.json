@@ -1,0 +1,162 @@
+{
+ "service": "https://gisp.mcgi.state.mi.us/maps/rest/services/DEQ/Water_Withdrawal/MapServer/3",
+ "service_description": "C11491. 12/22/2014",
+ "segments": 4801,
+ "version_field": [
+  "10",
+  "None"
+ ],
+ "cutoff_over_line_times_index_flow_gpm": {
+  "segments": 4257,
+  "median": 0.49996546584349116,
+  "share_within_1pct_of_half": 0.9995301855766971
+ },
+ "shoreline_segments_cutoff_gpm": [
+  1440
+ ],
+ "no_limit_segments": {
+  "Cold small river": 21,
+  "Cold stream": 140,
+  "Cold transitional large river": 0,
+  "Cold transitional small river": 0,
+  "Cold transitional stream": 2,
+  "Cool large river": 0,
+  "Cool small river": 0,
+  "Cool stream": 0,
+  "Warm large river": 0,
+  "Warm small river": 0,
+  "Warm stream": 0
+ },
+ "zone_lines_by_type": {
+  "Cold small river": [
+   [
+    0.105,
+    0.105,
+    0.21
+   ]
+  ],
+  "Cold stream": [
+   [
+    0.0001,
+    0.04,
+    0.0401
+   ],
+   [
+    0.14,
+    0.14,
+    0.2
+   ]
+  ],
+  "Cold transitional large river": [
+   [
+    0.0001,
+    0.03,
+    0.0301
+   ]
+  ],
+  "Cold transitional small river": [
+   [
+    0.0001,
+    0.02,
+    0.0201
+   ]
+  ],
+  "Cold transitional stream": [
+   [
+    0.0001,
+    0.04,
+    0.0401
+   ]
+  ],
+  "Cool large river": [
+   [
+    0.14,
+    0.19,
+    0.25
+   ]
+  ],
+  "Cool small river": [
+   [
+    0.15,
+    0.19,
+    0.25
+   ]
+  ],
+  "Cool stream": [
+   [
+    0.0001,
+    0.04,
+    0.0401
+   ],
+   [
+    0.06,
+    0.15,
+    0.25
+   ]
+  ],
+  "Warm large river": [
+   [
+    0.1,
+    0.16,
+    0.22
+   ]
+  ],
+  "Warm small river": [
+   [
+    0.08,
+    0.13,
+    0.17
+   ]
+  ],
+  "Warm stream": [
+   [
+    0.1,
+    0.18,
+    0.24
+   ]
+  ]
+ },
+ "index_flow_at_gages": {
+  "layer_over_report": {
+   "n": 42,
+   "median": 1.062897220748284,
+   "p10": 0.6500047989670994,
+   "p90": 2.0816424727976184
+  },
+  "layer_over_gage_1997_2025": {
+   "n": 66,
+   "median": 0.8627802322256484,
+   "p10": 0.41213847451702923,
+   "p90": 1.8447573084614803
+  },
+  "report_over_gage_1997_2025": {
+   "n": 41,
+   "median": 0.9424495213545735,
+   "p10": 0.7327445842121584,
+   "p90": 1.2084636744381883
+  }
+ },
+ "gages_matched_to_a_segment": 70,
+ "gages_matched_same_name": 67,
+ "five_year_share_eligible": {
+  "five_year_share": [
+   0.5667678148383258,
+   0.8721872061430009,
+   0.9328240595973691
+  ],
+  "five_year_share_1320ft": [
+   0.5870804058412118,
+   0.9215806576353663,
+   0.9580323175959097
+  ],
+  "five_year_share_5280ft": [
+   0.4718013813559327,
+   0.8016386447627488,
+   0.8937130623745692
+  ]
+ },
+ "delay_rank_correlation_with_distance": {
+  "five_year_share_1320ft": 0.9283648498331479,
+  "five_year_share_5280ft": 0.9586206896551721
+ }
+}

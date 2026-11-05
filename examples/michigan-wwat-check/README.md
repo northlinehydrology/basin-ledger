@@ -73,8 +73,91 @@ Two more measures are recorded but not scored. They were added after the rule wa
 basin's WWAT segments with no zone lines, and the share of its WWAT length where a bedrock well passes without a
 depletion estimate (bedrock categories −1 and 1; Reeves and others, 2009, table 1).
 
+## Results
+
+Of the 78 basins, 30 are eligible and 13 are candidates. The step 2 set:
+
+| Basin (USGS gage) | NextGen flowpath | Median summer | Delay | Use | Municipal | Temperature | Top quarter |
+|---|---|---|---|---|---|---|---|
+| Clam River at Vogel Center (04121300) | wb-658385 | 0.85 | 0.03 | 0.76 | 0.83 | 0.62 | 3 |
+| Black River near Bessemer (04031000) | wb-647466 | 0.96 | 0.97 | 0.07 | 0.17 | 0.79 | 3 |
+| Little Muskegon River near Oak Grove (04121944) | wb-658600 | 0.65 | 0.24 | 0.93 | 0.90 | 0.59 | 2 |
+| Rabbit River near Hopkins (04108600) | wb-646089 | 0.81 | 0.55 | 0.69 | 0.86 | 0.09 | 2 |
+| Pine River near Rudyard (04127917) | wb-660051 | 0.73 | 0.83 | 0.34 | 0.17 | 0.83 | 2 |
+| Control: Sturgeon River near Nahma Junction (04057510) | wb-644746 | 0.88 | 0.07 | 0.28 | 0.17 | 0.38 | 1 |
+| Control: Middle Branch Escanaba River at Humboldt (04057800) | wb-654919 | 0.31 | 0.48 | 0.07 | 0.17 | 0.93 | 1 |
+
+The other eight candidates, in order: Paw Paw, Rogue, Fish Creek, West Branch Ontonagon, Dowagiac, Au Train, Jordan
+and Silver. `candidates.csv` has every basin's measures, scores and hydrofabric ids.
+
+What drives the scores:
+
+- **Median summer only.** The share of the 1-in-10 dry summer flow that a withdrawal at the Zone D boundary would
+  take ranges from under 1% to 86% at eligible gages. The 1-in-10 dry summer flow is 25% to 92% of the gage's
+  index flow. The largest shares are where the layer's index flow is high: at the Black, West Branch Ontonagon,
+  Silver and Clam gages it is 1.7 to 2.5 times the gage's index flow for 1997–2025. The West Branch Ontonagon also
+  has the lowest dry summer (25% of index flow). Where the gage's segment is cold-transitional (Rogue, Dowagiac,
+  Au Train, White, Sturgeon at Wolverine) the Zone D boundary is 2% to 4% of index flow, and a passing withdrawal
+  takes 2% or less of the dry summer flow.
+- **Delay.** In the tool's own depletion model, a well half a mile from the stream reaches 57% to 93% of its
+  long-run depletion after five years (median 87%). The Jordan is lowest. The basins rank almost the same with the
+  well a quarter mile away (rank correlation 0.93) or a mile away (0.96).
+- **Registered and actual use.** Groundwater irrigation is highest in the southwest and central Lower Peninsula
+  (Dowagiac, Fish Creek, Little Muskegon) and near zero in the Upper Peninsula.
+- **Municipal exemption.** Community supply wells in eligible basins total up to 14,600 gal/min of pump capacity
+  (Paw Paw, 28 systems). The Rogue and Dowagiac also have tracker records inside the basin.
+- **Flow, not temperature.** Cold-transitional streams are 0% to 100% of eligible basins' WWAT length.
+
+## WWAT layer
+
+`layer-check.json` has the numbers below.
+
+- **Vintage.** The only public copy of the stream layer we found is the state's Water_Withdrawal map service, layer
+  3, dated 12/22/2014, with VERSION 10 on every segment. The EGLE open data services we searched have no copy. The
+  online tool may run on newer values.
+- **Units.** Index flow (QE50) is in ft³/s. At 42 gages in Hamilton and others (2008), the layer's index flow at the
+  gage's segment, scaled by drainage area, has a median of 1.06 times the report's gage value (10th to 90th
+  percentile 0.65 to 2.08). The layer's values are the regression estimates, not the gage records.
+- **Cutoffs.** On 99.95% of segments, each zone cutoff in the layer equals half of the zone line times index flow,
+  in gal/min. The tool appears to screen against half the index flow. We have not confirmed this in Hamilton and
+  Seelbach (2011), which we could not retrieve. Shoreline segments have a fixed cutoff of 1,440 gal/min.
+- **Zone lines.** The layer's Zone D boundary, as a fraction of index flow, is 0.20 for cold streams, 0.21 for cold
+  small rivers, 0.04, 0.02 and 0.03 for cold-transitional streams, small rivers and large rivers, and 0.17 to 0.25
+  for cool and warm types. These are the layer's values. Part 327 defines the zones by fish response, not by
+  fraction of index flow (MCL 324.32701(1)(tt) to (ww)).
+- **No zone lines.** 163 segments, 161 of them cold streams and cold small rivers, have 99999 for every zone line.
+  They include stretches of the Au Sable, Manistee, Pere Marquette, Boardman, Pigeon and Baldwin. We don't know
+  what the tool does there. This is a question for EGLE, or a test of the online tool, before step 2.
+
+## Limitations
+
+- Measures 1 and 2 are taken at the gage and from the layer's segment values. A withdrawal on a headwater tributary
+  meets that tributary's index flow and aquifer values, not the gage's.
+- Gages are matched to WWAT segments by drainage area, river name and distance. 70 of 78 gages have a match. Three
+  matched segments have no name in the layer. The South Branch Flint gage matched a North Branch Flint segment. Of
+  these, only the Pine at High School Bridge is eligible, and its segment has no zone lines.
+- Dry summer flow is from water years 1997–2025. The report's index flows are from records through 2005.
+- The delay measure is the tool's own model run longer. It doesn't say how real aquifers respond.
+- Irrigation is county-level. We found no public site-level registered withdrawals, so measure 3 is a proxy.
+- Wellogic pump capacity is what was installed, not what is pumped. Some status fields are blank and are kept.
+- Out-of-basin return is not scored.
+- The percentile ranks are relative to these 30 basins. A basin low on every score is not shown to be safe.
+
+## Run
+
+```bash
+uv run --group gis python examples/michigan-cold-streams/fetch.py    # if not run already
+uv run --group gis python examples/michigan-cold-streams/screen.py
+uv run --group gis python examples/michigan-wwat-check/fetch.py      # WWAT layer and community wells (~16 MB)
+uv run --group gis python examples/michigan-wwat-check/screen.py     # candidates.csv, layer-check.json
+```
+
+NextGen ids come from a local copy of the v2.2 hydrofabric (`$HYDROFABRIC`). Without one the ids are left blank.
+
 ## References
 
+- Hamilton, D.A., and Seelbach, P.W., 2011, Michigan's water withdrawal assessment process and internet screening
+  tool: Michigan Department of Natural Resources, Fisheries Special Report 55. Cited, not retrieved.
 - Hamilton, D.A., Sorrell, R.C., and Holtschlag, D.J., 2008, A regression model for computing index flows describing
   the median flow for the summer month of lowest flow in Michigan: U.S. Geological Survey Scientific Investigations
   Report 2008–5096.
