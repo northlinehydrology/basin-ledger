@@ -67,3 +67,16 @@ def test_forward_model(tmp_path, swatplus):
     p.write_text("name,model,target,value,lower,upper,transform\nk,modflow6,npf.k:all,5,0.5,50,log\n")
     with pytest.raises(NotImplementedError, match="modflow6"):
         K.run_forward_model(d / "basin.toml", p, o, tmp_path / "sim2.csv")
+
+
+def test_baseflow_separation():
+    # a flow that only recedes is all base flow once the filter settles; a spike adds quick flow only
+    q = 10 * 0.95 ** np.arange(200)
+    alpha = float(np.quantile(K.recession_ratios(q), 0.9))
+    assert alpha == pytest.approx(0.95)
+    b = K.eckhardt(q, alpha)
+    assert (b <= q + 1e-12).all() and b[-1] / q[-1] > 0.95
+    spike = q.copy()
+    spike[100] += 50
+    bs = K.eckhardt(spike, alpha)
+    assert bs[100] < spike[100] / 2 and bs.sum() < spike.sum()

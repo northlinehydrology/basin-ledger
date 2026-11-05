@@ -223,5 +223,61 @@ def write_pest_files(*args, **kwargs):
     raise NotImplementedError("PEST++ IES control and template files (pyEMU) are planned; see docs/design.md")
 
 
+USGS_DAILY = "https://api.waterdata.usgs.gov/ogcapi/v0/collections/daily/items"
+CFS_TO_CMS = 0.0283168466
+
+
+def usgs_daily(site: str, start: str, end: str, cache: Path | None = None) -> list[tuple[str, float, str]]:
+    """USGS daily mean discharge (m3 s-1) with its approval status, from the USGS Water Data API's daily values
+    (parameter 00060, statistic 00003), cached as CSV: [(date, flow, approval), ...]."""
+    import json
+    import urllib.request
+
+    if cache and Path(cache).exists():
+        with open(cache, newline="") as f:
+            return [(r["date"], float(r["flow"]), r["approval"]) for r in csv.DictReader(f)]
+    url = (f"{USGS_DAILY}?f=json&monitoring_location_id=USGS-{site}&parameter_code=00060&statistic_id=00003"
+           f"&time={start}/{end}&limit=10000")
+    rows = []
+    while url:
+        with urllib.request.urlopen(url, timeout=60) as r:
+            page = json.load(r)
+        rows += [(f["properties"]["time"][:10], float(f["properties"]["value"]) * CFS_TO_CMS,
+                  f["properties"].get("approval_status") or "") for f in page["features"]
+                 if f["properties"]["value"] is not None]
+        url = next((link["href"] for link in page.get("links", []) if link["rel"] == "next"), None)
+    rows.sort()
+    if cache:
+        Path(cache).parent.mkdir(parents=True, exist_ok=True)
+        with open(cache, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["date", "flow", "approval"])
+            w.writerows(rows)
+    return rows
+
+
+def recession_ratios(q: np.ndarray, run_days: int = 5) -> np.ndarray:
+    """Ratios of successive days' flow on recession days: days in runs of at least ``run_days`` falling days, with
+    flow below the median (as nextgen-michigan's scripts/recession.py)."""
+    q = np.asarray(q, float)
+    falling = np.r_[False, q[1:] < q[:-1]]
+    run = np.zeros(len(q), int)
+    for i in range(1, len(q)):
+        run[i] = run[i - 1] + 1 if falling[i] else 0
+    sel = (run >= run_days) & (q < np.median(q))
+    return q[1:][sel[1:]] / q[:-1][sel[1:]]
+
+
+def eckhardt(q: np.ndarray, alpha: float, bfi_max: float = 0.8) -> np.ndarray:
+    """Base flow by the Eckhardt (2005) recursive filter. BFImax 0.8 is Eckhardt's value for perennial streams on
+    porous aquifers [A]; alpha is the recession constant (here the 90th percentile of the recession ratios)."""
+    q = np.asarray(q, float)
+    b = np.zeros_like(q)
+    b[0] = q[0]
+    for i in range(1, len(q)):
+        b[i] = min(((1 - bfi_max) * alpha * b[i - 1] + (1 - alpha) * bfi_max * q[i]) / (1 - alpha * bfi_max), q[i])
+    return b
+
+
 def fetch_usgs(*args, **kwargs):
-    raise NotImplementedError("USGS streamflow and groundwater level downloads are planned; see docs/design.md")
+    raise NotImplementedError("USGS groundwater level downloads are planned; see docs/design.md")
