@@ -10,6 +10,8 @@ Config (TOML, all optional):
     gain_fraction = 0.0         # of withdrawal
     intake_tds = 0.3            # kg m-3 of dissolved solids in the water withdrawn
     power = 50.0                # MW
+    dry_withdrawal = 0.1        # in dry mode, the share of withdrawal still taken (staff and process water)
+    dry_power = 1.15            # in dry mode, power x this
     time_step = 3600            # s
 """
 
@@ -32,6 +34,7 @@ OUTPUTS = {
 }
 INPUTS = {
     "water_user_water__withdrawal_volume_flux_limit": "m3 s-1",  # a cap set by a feedback rule; inf = none
+    "water_user__dry_mode_flag": "1",                            # 1 = dry: no evaporative cooling
 }
 
 
@@ -44,7 +47,8 @@ class SyntheticUser(Bmi):
         self._t = 0.0
         self._dt = 3600.0
         self._end = 100 * 365 * 86400.0
-        self.p = dict(withdrawal=0.006, consumed_fraction=0.7, gain_fraction=0.0, intake_tds=0.3, power=50.0)
+        self.p = dict(withdrawal=0.006, consumed_fraction=0.7, gain_fraction=0.0, intake_tds=0.3, power=50.0,
+                      dry_withdrawal=0.1, dry_power=1.15)
 
     def initialize(self, config_file=None):
         cfg = {}
@@ -65,8 +69,11 @@ class SyntheticUser(Bmi):
         doy = (mid / 86400.0) % 365.25
         w = self.p["withdrawal"] * (1 + 0.2 * math.sin(2 * math.pi * (hour - 9) / 24)) \
             * (1 + 0.3 * math.sin(2 * math.pi * (doy - 110) / 365.25))
+        dry = self._v["water_user__dry_mode_flag"][0] >= 0.5
+        if dry:
+            w *= self.p["dry_withdrawal"]
         w = min(w, float(self._v["water_user_water__withdrawal_volume_flux_limit"][0]))
-        f = self.p["consumed_fraction"]
+        f = 0.2 if dry else self.p["consumed_fraction"]
         g = self.p["gain_fraction"] * w
         c = f * w
         self._v["water_user_water__withdrawal_volume_flux"][0] = w
@@ -75,7 +82,7 @@ class SyntheticUser(Bmi):
         self._v["water_user_water__return_volume_flux"][0] = (w - c) + g
         self._v["water_user_return_water_dissolved_solids__mass_flux"][0] = w * self.p["intake_tds"]
         self._v["water_user_return_water__temperature"][0] = 25.0 + 5.0 * math.sin(2 * math.pi * (doy - 110) / 365.25)
-        self._v["water_user__electric_power"][0] = self.p["power"] if w > 0 else 0.0
+        self._v["water_user__electric_power"][0] = self.p["power"] * (self.p["dry_power"] if dry else 1.0)
 
     def update_until(self, time):
         while self._t + self._dt <= time + 1e-9:

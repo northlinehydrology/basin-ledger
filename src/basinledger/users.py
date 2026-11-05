@@ -13,6 +13,11 @@ usually hourly. Basin Ledger reads it through roles, not through model-specific 
     power         water_user__electric_power                                 MW       optional
     constituents  water_user_return_water_<name>__mass_flux                  kg s-1   in the return, one per constituent, optional
 
+Inputs a feedback rule sets (optional; a rule asking for one the component lacks is refused):
+
+    limit         water_user_water__withdrawal_volume_flux_limit             m3 s-1   a cap on withdrawal; inf = none
+    dry_mode      water_user__dry_mode_flag                                  1        1 = run without evaporative cooling
+
 The balance every user must close, every step:  withdrawal + gain = consumption + return + d(storage)/dt.
 
 A component using other names is mapped role by role in the example's config (CoolingWaterBmi reports
@@ -41,6 +46,10 @@ COMMON = {
     "storage": "water_user_water__volume",
     "temperature": "water_user_return_water__temperature",
     "power": "water_user__electric_power",
+}
+CONTROLS = {
+    "limit": "water_user_water__withdrawal_volume_flux_limit",
+    "dry_mode": "water_user__dry_mode_flag",
 }
 VOLUME_ROLES = ("withdrawal", "gain", "consumption", "return")
 CONSTITUENT = "water_user_return_water_{}__mass_flux"
@@ -94,7 +103,11 @@ class WaterUser:
         self.bmi = component
         self.bmi.initialize(config)
         outs = set(self.bmi.get_output_var_names())
+        ins = set(self.bmi.get_input_var_names())
         self.inputs = inputs or {}
+        self.control_vars = {k: (variables or {}).get(k, v) for k, v in CONTROLS.items()
+                             if (variables or {}).get(k, v) in ins}
+        self.controls: dict[str, float] = {}
         self.rtol = rtol
         self.var: dict[str, str] = {}
         for role, common in COMMON.items():
@@ -144,6 +157,28 @@ class WaterUser:
             return self._get(v) + self._factor[role]
         return self._get(v) * self._factor[role]
 
+    def set_controls(self, **controls: float):
+        """Limits for the coming day (limit in m3 s-1, dry_mode 0 or 1). Controls not given go back to none."""
+        for k in controls:
+            if k not in self.control_vars:
+                raise KeyError(f"{self.name}: the component has no {k!r} input ({CONTROLS.get(k, k)})")
+        self.controls = dict(controls)
+
+    def _apply_controls(self):
+        for k, v in self.control_vars.items():
+            default = np.inf if k == "limit" else 0.0
+            self.bmi.set_value(v, np.array([self.controls.get(k, default)], dtype=np.float64))
+
+    def fast_forward(self, day: int):
+        """Step the component to the start of day ``day`` without recording, for a restart. Inputs are set as in a
+        run, so a deterministic component reaches the same state."""
+        t_end = day * U.DAY / self.seconds
+        while self.bmi.get_current_time() < t_end - 1e-9 * max(1.0, abs(t_end)):
+            t0 = self.bmi.get_current_time()
+            for v, f in self.inputs.items():
+                self.bmi.set_value(v, np.array([f(t0 * self.seconds)], dtype=np.float64))
+            self.bmi.update()
+
     def advance_day(self, day: int) -> DailyUse:
         """Step the component to the end of day ``day`` (0-based, from the run start) and integrate the day."""
         t_end = (day + 1) * U.DAY / self.seconds
@@ -152,6 +187,7 @@ class WaterUser:
         heat = 0.0
         s0 = self._role("storage") if "storage" in self.var else 0.0
         eps = 1e-9 * max(1.0, abs(t_end))
+        self._apply_controls()
         while self.bmi.get_current_time() < t_end - eps:
             t0 = self.bmi.get_current_time()
             for v, f in self.inputs.items():
