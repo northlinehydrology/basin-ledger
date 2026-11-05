@@ -241,3 +241,63 @@ def test_plaster_creek_runs_calibrated(plaster):
     s = json.loads((out / "summary.json").read_text())
     assert s["models"] == {"nextgen": "calibrated"} and "USGS 04119055" in s["calibrated_to"]["nextgen"]
     assert "not calibrated" in s["status_note"]  # the users aren't
+
+
+def add_cfe_and_areas(run, cell_area):
+    """CFE outputs with SOIL_TO_GW_FLUX for cat-1 and cat-2, and their areas: 50 cells each of the small grid."""
+    hours = DAYS * 24
+    (run / "outputs" / "ngen").mkdir(parents=True, exist_ok=True)
+    for k, cat in enumerate(("cat-1", "cat-2")):
+        rows = ["Time Step,Time,Q_OUT,SOIL_TO_GW_FLUX"]
+        for h in range(hours):
+            t = START + dt.timedelta(hours=h)
+            perc = (k + 1) * 1e-5 * (1 + np.sin(2 * np.pi * h / 48))  # m per hour
+            rows.append(f"{h},{t:%Y-%m-%d %H:%M:%S},0,{float(perc)!r}")
+        (run / "outputs" / "ngen" / f"{cat}.csv").write_text("\n".join(rows) + "\n")
+    with sqlite3.connect(run / "config" / "test_subset.gpkg") as db:
+        db.execute("create table divides (divide_id text, areasqkm real)")
+        db.executemany("insert into divides values (?, ?)", [("cat-1", 50 * cell_area / 1e6), ("cat-2", 50 * cell_area / 1e6)])
+
+
+def test_nextgen_with_modflow6(run, tmp_path, libmf6):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("m", ROOT / "examples" / "synthetic" / "model.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    cell = m.SMALL_CELL ** 2
+    add_cfe_and_areas(run, cell)
+    # cat-1 covers columns 0-4, cat-2 columns 5-9; the river (column 0) belongs to wb-1
+    (tmp_path / "rch.csv").write_text("object,layer,row,col,area_m2\n" + "".join(
+        f"{'cat-1' if c < 5 else 'cat-2'},0,{r},{c},{cell}\n" for r in range(10) for c in range(10)))
+    (tmp_path / "riv.csv").write_text("object,layer,row,col\n" + "".join(f"wb-1,0,{r},0\n" for r in range(10)))
+    shutil_copy = __import__("shutil").copy
+    shutil_copy(ROOT / "examples" / "synthetic" / "model.py", tmp_path / "model.py")
+    cfg = config(run, tmp_path, '''
+[modflow6]
+builder = "model:build_small"
+[recharge]
+map = "rch.csv"
+area_rtol = 1e-9
+[rivers]
+package = "riv"
+map = "riv.csv"
+stage = "nextgen_depth"
+bed_thickness = 1.0
+''')
+    b = Basin(cfg, run="ngen-mf6")
+    stages = []
+    for _ in range(DAYS):
+        b.step()
+        stages.append(b.mf6.get("STAGE", "GWF", "RIV").copy())
+    t, s = b.ledger.table(), {k: np.array(v) for k, v in b.series.items()}
+    rbot = b.mf6.get("RBOT", "GWF", "RIV")
+    b.finalize()
+    # recharge: sent (CFE's percolation over each catchment's area) equals received, every day
+    np.testing.assert_allclose(t["recharge:received"], t["recharge:sent"], rtol=1e-12)
+    want = sum((k + 1) * 1e-5 * (1 + np.sin(2 * np.pi * np.arange(24) / 48)).sum() * 50 * cell for k in range(2))
+    assert t["recharge:sent"][0] == pytest.approx(want, rel=1e-6)  # read through a 4-byte buffer, as for SWAT+
+    # stage = RBOT + bed thickness + the day's t-route depth on wb-1
+    depth = 0.1 * s["flow:wb-1"]  # the synthetic run's depth is a tenth of its flow
+    np.testing.assert_allclose(np.array(stages)[:, 0], rbot[0] + 1.0 + depth, rtol=1e-6)
+    assert np.isfinite(s["baseflow:wb-1"]).all() and len(s["baseflow:wb-1"]) == DAYS

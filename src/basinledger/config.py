@@ -37,6 +37,12 @@ Paths are relative to the config file. ``{swatplus_refdata}`` stands for the exa
     package = "riv"
     map = "all:cha01"                   # every RIV entry to one channel, or a CSV: object, layer, row, col
 
+    [rivers]                            # optional: MODFLOW 6 river cells by flowpath, for stage and base flow out
+    package = "riv"
+    map = "maps/river_cells.csv"        # object (flowpath or channel), layer, row, col
+    stage = "nextgen_depth"             # or "fixed": the stage in MODFLOW 6's input
+    bed_thickness = 1.0                 # m [A]: stage = RBOT + bed thickness + the day's depth
+
     [[utilities]]                       # optional: a water system (see chain.py)
     name = "city"
     sources = [{route = "well:pw1", share = 1.0}]
@@ -78,6 +84,11 @@ import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+
+
+def cache_dir() -> Path:
+    """Where examples keep downloaded and generated data, outside git: $BASINLEDGER_CACHE or ~/.cache/basinledger."""
+    return Path(os.environ.get("BASINLEDGER_CACHE", Path.home() / ".cache" / "basinledger"))
 
 
 def nextgen_michigan() -> Path:
@@ -134,6 +145,7 @@ class ExampleConfig:
     rules: list[dict] = field(default_factory=list)
     outputs: dict = field(default_factory=dict)
     nextgen_run: Path | None = None
+    rivers: dict | None = None
 
     @property
     def surface(self) -> str:
@@ -163,6 +175,7 @@ def _path(base: Path, p: str) -> Path:
     if "{swatplus_refdata}" in p:
         p = p.replace("{swatplus_refdata}", str(swatplus_refdata()))
     p = p.replace("{nextgen_michigan}", str(nextgen_michigan()))
+    p = p.replace("{cache}", str(cache_dir()))
     q = Path(p).expanduser()
     return q if q.is_absolute() else (base / q).resolve()
 
@@ -173,7 +186,7 @@ def load(path: str | Path) -> ExampleConfig:
         c = tomllib.load(f)
     base = path.parent
     known = {"name", "description", "run", "swatplus", "modflow6", "recharge", "wells", "users", "calibration",
-             "exchange", "utilities", "rules", "outputs", "nextgen"}
+             "exchange", "utilities", "rules", "outputs", "nextgen", "rivers"}
     if set(c) - known:
         raise ValueError(f"{path}: unknown sections {sorted(set(c) - known)}")
     mf = c.get("modflow6", {})
@@ -211,4 +224,5 @@ def load(path: str | Path) -> ExampleConfig:
         rules=c.get("rules", []),
         outputs=c.get("outputs", {}),
         nextgen_run=_path(base, c["nextgen"]["run"]) if "nextgen" in c else None,
+        rivers=c.get("rivers"),
     )

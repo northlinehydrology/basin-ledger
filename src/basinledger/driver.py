@@ -104,9 +104,9 @@ class Basin:
         # MODFLOW 6 (optional): built (or copied) for the run, or for the days left after a restart
         self.mf6 = None
         if cfg.has_modflow6:
-            if cfg.surface != "swatplus":
-                raise NotImplementedError("MODFLOW 6 with NextGen needs CFE's percolation in the run's outputs "
-                                          "(not yet); see coupling/nextgen.py")
+            if cfg.surface == "nextgen" and "soil_water_table__recharge_rate" not in self.swat.get_output_var_names():
+                raise NotImplementedError("MODFLOW 6 with NextGen needs CFE's percolation (SOIL_TO_GW_FLUX) in the "
+                                          "run's catchment outputs; see coupling/nextgen.py")
             ws = self.folder / "mf6"
             if cfg.mf6_builder:
                 _example_function(cfg, cfg.mf6_builder, "build")(ws, self.days - self.day,
@@ -122,8 +122,13 @@ class Basin:
                 self.mf6.set_heads(np.load(Path(restart) / "heads.npy"))
             if self.mf6.end < self.days - self.day - 1e-9:
                 raise ValueError(f"MODFLOW 6 simulation is {self.mf6.end} days; the run needs {self.days - self.day}")
-        elif cfg.wells or ex or cfg.outputs.get("heads"):
-            raise ValueError("wells, the two-way exchange and head outputs need a [modflow6] model")
+        elif cfg.wells or ex or cfg.outputs.get("heads") or cfg.rivers:
+            raise ValueError("wells, rivers, the two-way exchange and head outputs need a [modflow6] model")
+        self.rivers = None  # built on the first day, once MODFLOW 6's river package has its entries
+        if cfg.rivers and cfg.rivers.get("stage", "fixed") not in ("fixed", "nextgen_depth"):
+            raise ValueError("[rivers] stage must be fixed or nextgen_depth")
+        if cfg.rivers and cfg.rivers.get("stage") == "nextgen_depth" and cfg.surface != "nextgen":
+            raise ValueError("[rivers] stage = nextgen_depth needs a [nextgen] surface model")
 
         self.ledger = Ledger()
         L = self.ledger
@@ -131,7 +136,7 @@ class Basin:
         if self.mf6 is not None:
             aquifers = self.sw.names("soil_water_table__recharge_rate")
             self.map = self._area_map(cfg.recharge_map, aquifers)
-            areas = S.aquifer_areas(swat_dir)
+            areas = S.aquifer_areas(swat_dir) if swat_dir else self.swat.areas
             self.map.check(self.mf6.cell_area, np.array([areas[a] for a in aquifers]), cfg.area_rtol)
             self.recharge = RechargeLink(self.swat, self.mf6, self.map, cfg.recharge_package)
             L.pair("recharge:sent", "recharge:received")
@@ -200,6 +205,9 @@ class Basin:
             if c in self._ch_index and nx:
                 self._nexus.setdefault(nx, []).append(self._ch_index[c])
         self.series.update({f"flow:{nx}": [] for nx in self._nexus})
+        if cfg.rivers:
+            for c in self._river_objects(cfg.rivers):
+                self.series[f"baseflow:{c}"] = []
         self.series.update({f"head:{n}": [] for n, _ in self.out_heads})
 
         if saved:
@@ -217,6 +225,38 @@ class Basin:
         import csv
         with open(self.cfg.folder / spec, newline="") as f:
             return list(dict.fromkeys(r["object"] for r in csv.DictReader(f)))
+
+    def _river_objects(self, rv) -> list[str]:
+        spec = rv.get("map", "")
+        if spec.startswith("all:"):
+            return [spec[4:]]
+        import csv
+        with open(self.cfg.folder / spec, newline="") as f:
+            return list(dict.fromkeys(r["object"] for r in csv.DictReader(f)))
+
+    def _rivers_day(self):
+        """Set today's river stages (if from NextGen's depth), before the solve."""
+        rv = self.cfg.rivers
+        pkg = rv.get("package", "riv")
+        if self.rivers is None:
+            cmap = ChannelMap.from_spec(rv.get("map", ""), self.cfg.folder, self.mf6, pkg, self.sw.names(S.QOUT))
+            self.rivers = (pkg, cmap, self.mf6.get("RBOT", self.mf6.model, pkg.upper()).astype(float),
+                           self.mf6.get("STAGE", self.mf6.model, pkg.upper()).astype(float))
+        pkg, cmap, rbot, stage0 = self.rivers
+        if rv.get("stage") == "nextgen_depth":
+            from .coupling.nextgen import DEPTH
+            depth = dict(zip(self.sw.names(DEPTH), self.sw.get(DEPTH)))
+            e = cmap.entry_channel
+            stage = stage0.copy()
+            for i, c in enumerate(cmap.channels):
+                stage[e == i] = rbot[e == i] + float(rv.get("bed_thickness", 1.0)) + depth[c]
+            self.mf6.set_stage(pkg, stage)
+
+    def _rivers_out(self):
+        pkg, cmap, _, _ = self.rivers
+        q = self.mf6.simvals(pkg)  # m3 d-1, positive into the aquifer
+        for i, c in enumerate(cmap.channels):
+            self.series[f"baseflow:{c}"].append(-float(q[cmap.entry_channel == i].sum()) / DAY)
 
     def _forcing(self, u: C.UserConfig, comp) -> dict:
         """Hourly weather inputs for a user, from its forcing source, for the inputs its component takes."""
@@ -326,9 +366,13 @@ class Basin:
             self.exchange = StreamExchange(self.mf6, ex.get("package", "riv"), cmap)
         L.enter("recharge:sent", self.recharge.transfer())
         rt.apply_wells()
+        if self.cfg.rivers:
+            self._rivers_day()
         self.mf6.solve_day()
         L.enter("recharge:received", self.recharge.received())
         rt.read_wells()
+        if self.cfg.rivers:
+            self._rivers_out()
         if self.cfg.exchange:
             self._enter_exchange(L)
             L.enter("swatplus:aquifer_outflow", float(self.sw.get(S.AQU_OUT).sum()) * DAY)

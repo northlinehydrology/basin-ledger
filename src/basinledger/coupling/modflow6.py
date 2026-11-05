@@ -126,6 +126,10 @@ class Modflow6:
         qq[entry] = q
         self.set("Q", package, qq)
 
+    def set_stage(self, package: str, stage: np.ndarray):
+        """River stages, m, one per entry of a river package."""
+        self.set("STAGE", package, np.asarray(stage, dtype=float))
+
     def solve_day(self):
         self.api.do_time_step()
         self.api.finalize_time_step()
