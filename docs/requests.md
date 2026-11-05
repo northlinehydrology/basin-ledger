@@ -13,15 +13,24 @@ what, why, and how Basin Ledger copes until then. Written Nov 4, 2026.
    infinity means no limit). Curtailment and well drawdown rules set it before each day. `CoolingWaterBmi` should
    meet a limit the way a campus would: by running dry or with more assist, using more electricity. Its balance must
    still close, and the electricity must follow. Until then, rules can only be tested on the synthetic user.
-   *Status (requests 2 to 4): decided for the release after 3.10.0, which ships with the pyyaml fix only. Until
-   then Basin Ledger's rules are tested on the synthetic user. The design follows realistic operation:*
+   *Status (requests 2 to 5): built Nov 5, 2026 on waterledger's `water-limits` branch, for the release after 3.10.0;
+   not released. Until it is on PyPI, Basin Ledger's rules are tested on the synthetic user. The design follows realistic
+   operation:*
    - *The heat to remove is fixed, since the campus must hold its temperature. A limit caps the wet share of the heat
      rejected each step, and the heat balance is solved again.*
    - *Capped evaporative duty moves to dry coolers and chillers, at more electricity. A limit of 0 is dry mode.*
    - *Heat the installed dry and chiller capacity can't take is reported as heat not removed (IT load that would
      have to be shed), never dropped.*
    - *Energy and water balances close every hour.*
-   - *Return load = intake concentration × withdrawal × (1 − drift's share of the dissolved mass), about 0.1% for drift. Evaporation carries no dissolved solids, so all of the intake's mass leaves in blowdown and drift; blowdown concentration is the intake's times the cycles of concentration (waterledger design 0006).*
+   - *Return load = intake concentration × withdrawal for cooling × (1 − drift's share of the dissolved mass). Drift's
+     share is drift × circulation × (cycles − 1) / evaporation: about 1–16% across the model's ranges and 3–6% at central
+     values, not the 0.1% first written here (drift is 0.005–0.02% of the circulating flow, but blowdown is small beside
+     it). Evaporation carries no dissolved solids, so all of the intake's mass leaves in blowdown and drift; blowdown
+     concentration is the intake's times the cycles of concentration (waterledger design 0006).*
+   - *As built: towers plants, with no dry side, shed the load a limit leaves them and report it as heat not removed.
+     Dry mode is `water_user__dry_mode_flag`. The component also reports `water_user_unreturned_water_<name>__mass_flux`
+     (drift, leaks, scale), which with the return's mass adds to the intake's, and the common names as aliases
+     (request 5).*
 3. **A dry-mode input on `CoolingWaterBmi`**, for days a rule calls for no evaporative cooling. It may be the same
    mechanism as the limit, with a limit of zero for cooling water.
 4. **Intake concentrations and return loads.** For quality balances, a user needs the concentration of what it takes
