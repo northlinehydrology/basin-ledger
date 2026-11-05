@@ -7,8 +7,17 @@ returns, from public data, as a calculator. Basin Ledger accounts for a whole ba
 quality day by day across the coupled models, so a study can say where a large user's water comes from, where it goes,
 and what changes in the streams and the aquifer.
 
-Status (Nov 4, 2026): the water-user interface, the SWAT+ to MODFLOW 6 one-way coupling and the ledger work and are
-tested on a synthetic example. The rest of this note is design. Sections say which parts are built.
+Status (Nov 4, 2026). Built and tested on synthetic examples:
+
+- the water-user interface;
+- routes through SWAT+ and MODFLOW 6, and the utility chain;
+- feedback rules;
+- the one-way and two-way SWAT+–MODFLOW 6 couplings;
+- restarts;
+- the ledger, the command line, and the calibration module's structure.
+
+Not built yet: the NextGen hydrofabric builder, AORC forcing, applying calibration parameters, PEST++, and the first
+real example. Each section says which parts are built.
 
 ## Principles
 
@@ -49,16 +58,23 @@ src/basinledger/
   mapping.py           area maps between SWAT+ objects (catchments, aquifers, HRUs) and MODFLOW 6 cells
   units.py             unit factors to the ledger's SI units
   coupling/
-    modflow6.py        MODFLOW 6 through libmf6 (modflowapi): prepare, set, solve, read
-    recharge.py        SWAT+ aquifer recharge -> MODFLOW 6 recharge, one-way
-  chain.py             the utility chain (stub)
-  rules.py             feedback rules: curtailment, dry mode, drawdown limits (stub)
-  calibration.py       parameters, observations, calibration records, PEST++ IES (stub)
+    modflow6.py        MODFLOW 6 through libmf6 (modflowapi): prepare, set, solve, read, restart
+    swatplus.py        SWAT+ project edits (places of use, point sources, pass-through aquifers), reads and sets
+    recharge.py        SWAT+ aquifer recharge -> MODFLOW 6 recharge
+    exchange.py        MODFLOW 6 river exchange <-> SWAT+ channels (two-way)
+  routes.py            where a day's water goes: wells, SWAT+ places of use and point sources, outfalls
+  chain.py             the utility chain: production, losses, sources, sewer, outfall
+  rules.py             feedback rules: curtailment, dry mode, drawdown limits, and study-defined rules
+  calibration.py       records, parameter and observation tables, statistics, the forward model (PEST++ stubbed)
+  __main__.py          the command line: run, status
   hydrofabric.py       SWAT+ projects and maps from the NextGen hydrofabric, results keyed to its ids (stub)
   testing.py           a synthetic water user for the tests
 examples/
-  synthetic/           SWAT+'s Osu_1hru + a small MODFLOW 6 model + the synthetic user (the tests use it)
-    basin.toml  model.py  user.toml  fetch.py  notebook.py  README.md
+  synthetic/           SWAT+'s Osu_1hru + small MODFLOW 6 models + synthetic users (the tests use it)
+    basin.toml         one-way: recharge and a pumping user
+    surface.toml       a river user, a utility with a well and a plant outfall, three rules
+    two_way.toml       the stream-aquifer exchange, over an aquifer of Osu_1hru's own area
+    model.py  user.toml  mill.toml  small_user.toml  fetch.py  notebook.py  README.md
   plaster-creek/       planned: Plaster Creek (Kent County, Michigan) with a data center campus
   <place>/             any example:
     basin.toml         the config
@@ -93,13 +109,27 @@ Each example folder holds:
 
 **The day.** For day *d* the driver:
 
-1. steps each water user through the day (24 hourly steps) and integrates its volumes;
-2. routes each user's withdrawal and return. Built: a well in MODFLOW 6, or an outfall account. Planned: the utility
-   chain and SWAT+ point sources and places of use;
-3. runs SWAT+ for day *d* (`update()`); values read at the pause that follows are day *d*'s;
-4. prepares MODFLOW 6's step for day *d*. It sets day *d*'s recharge from SWAT+ and the day's well pumping, then
-   solves;
-5. enters both sides of every transfer in the ledger and checks them.
+1. runs the feedback rules on yesterday's state (SWAT+ channel flow, MODFLOW 6 heads) and sets each user's controls
+   for today;
+2. steps each water user through the day (24 hourly steps) and integrates its volumes;
+3. routes each user's withdrawal and return, directly or through its utility chain, along with yesterday's
+   stream-aquifer exchange;
+4. sets today's SWAT+ demands and point sources, runs SWAT+ for day *d* (`update()`), and reads back what it withdrew
+   and received. Values read at the pause are day *d*'s;
+5. prepares MODFLOW 6's step for day *d*, sets day *d*'s recharge from SWAT+ and the day's well pumping, solves, and
+   reads back the wells and the river exchange;
+6. enters both sides of every transfer in the ledger, checks them, and records the day's flows and heads.
+
+**Outputs.** `python -m basinledger run basin.toml` (or `Basin.write_outputs()`) writes three files:
+
+- `ledger.csv`: every account, every day;
+- `series.csv`: channel flows and heads at named cells;
+- `summary.json`: the calibration status, totals, and water still in transit at the end.
+
+**A SWAT+ detail.** SWAT+ 62.0.1 keeps one point of diversion per channel (`sd_ch%wallo_pod`), so several places of
+use on one channel share one row in `point_of_diver.wro`, which lists them all. SWAT+ holds its values as 4-byte reals,
+so transfers into and out of SWAT+ agree to a relative 1e-6 in the ledger. Transfers between the 8-byte models agree
+to 1e-9.
 
 **A MODFLOW 6 detail.** MODFLOW 6.5 and later keep a package's input in named arrays (`RCH/RECHARGE`, `WEL/Q`) and
 copy them into `BOUND` when the step is prepared. A value written to `BOUND`, as in the examples in Hughes et al.
@@ -149,14 +179,17 @@ A component with a daily or other step works the same way. The driver only asks 
 
 **Routing.** Each user's config names where its withdrawal comes from and where its return goes:
 
-- `well:<name>`: pumped from a MODFLOW 6 well (built);
-- `outfall:<name>`: a return entered in the ledger only (built);
-- planned:
-  - `swat:place_of_use:<name>`: a SWAT+ water allocation demand, taken from a channel, a reservoir or SWAT+'s aquifer;
-  - `swat:point_source:<name>`: a SWAT+ daily point source, positive;
-  - `utility:<name>`: the utility chain.
+- `well:<name>`: pumped from a MODFLOW 6 well;
+- `swat:place_of_use:<name>`: a SWAT+ water allocation demand, taken from its channel the same day. What the channel
+  couldn't supply is entered as a shortfall. The places of use are added to the run's copy of the project from the
+  config (`[swatplus] places_of_use`);
+- `swat:point_source:<name>`: a SWAT+ daily point source into its channel (`[swatplus] point_sources`);
+- `outfall:<name>`: a return entered in the ledger only;
+- `utility:<name>`: the utility chain.
 
-**The utility chain** (planned, `chain.py`) is accounting, not a model:
+Each route gets `requested` and `delivered` accounts in the ledger, paired every day.
+
+**The utility chain** (`chain.py`, built in its first form) is accounting, not a model:
 
 - **source:** the utility's withdrawal, split among its wells, intakes, and sources outside the basin;
 - **distribution losses;**
@@ -166,7 +199,22 @@ A component with a daily or other step works the same way. The driver only asks 
 - **outfall:** a SWAT+ point source, with loads and temperature.
 
 Each link is a ledger pair. A user on municipal supply is routed `utility:<system>`, and the chain places the water.
-A user with its own wells or intake is routed directly.
+A user with its own wells or intake is routed directly. Still to add:
+
+- losses returned to the aquifer as recharge;
+- inflow and infiltration taken from the aquifer;
+- a daily demand series;
+- the plant's own consumption and loads.
+
+**Feedback rules** (`rules.py`) run at the pause before each day, on yesterday's state:
+
+- **curtailment:** cap a user's withdrawal after low flow in a channel;
+- **dry mode:** run a user dry after low flow;
+- **drawdown limit:** cap a user's withdrawal after a low head in a cell.
+
+A study can add its own rule as a function in its example folder. When rules disagree, the strictest control wins.
+The ledger records each rule's decision every day. A rule asking a user for a control the component doesn't take is
+refused when the run starts.
 
 ## NextGen geography
 
@@ -283,25 +331,33 @@ and when depletion reaches a stream. It is not enough to change the streamflow S
 within each subbasin. Bailey et al. (2025) map HRU recharge to cells by area. That needs HRU percolation through BMI,
 which swatplus-bmi doesn't expose yet (`docs/requests.md`). The map format already takes any object type.
 
-**Two-way: stream-aquifer exchange (designed, not built).** MODFLOW 6 computes the exchange between streams and the
-aquifer (RIV, or SFR for routed streams), and that exchange replaces SWAT+'s aquifer return flow.
+**Two-way: stream-aquifer exchange (built with RIV; `coupling/exchange.py`, `examples/synthetic/two_way.toml`).**
+MODFLOW 6 computes the exchange between streams and the aquifer (RIV now, SFR for routed streams later), and that
+exchange replaces SWAT+'s aquifer return flow.
 
 - **No double counting.** SWAT+'s aquifer must stop returning water once MODFLOW 6 does.
-  - This is done in the example's SWAT+ inputs, not in code: `flo_min` and `revap_min` set above any reachable
-    storage, and `rchg_dp` zero. SWAT+'s aquifer then only receives recharge and holds it.
-  - The ledger counts SWAT+'s aquifer storage change as transferred to MODFLOW 6.
-  - A test checks that SWAT+'s aquifer outflow (`aquifer_water__volume_outflow_rate`) is zero on every day.
+  - This is done in the run's copy of the SWAT+ inputs, not in SWAT+'s code. SWAT+ 62.0.1 returns flow when the depth
+    to water is at or above `flo_min` (m) and allows revap above `revap_min`, so both are set to a depth the water
+    table can't reach (−1e6 m), and `rchg_dp` is zero. SWAT+'s aquifer then only receives recharge and holds it.
+  - The ledger holds SWAT+'s aquifer outflow (`aquifer_water__volume_outflow_rate`) at zero every day.
+  - A test checks that SWAT+'s aquifer storage grows by exactly the recharge sent to MODFLOW 6.
   - Recharge is counted once, in MODFLOW 6.
-- **Gaining reaches.** Leakage to a stream on day *d* is summed per SWAT+ channel through the flowpath-to-cell map. It
-  enters that channel as a positive point source on day *d*+1.
-- **Losing reaches.** Leakage from a stream on day *d* is taken from the channel on day *d*+1 as a water allocation
+- **Per channel, net.** The exchange on day *d* is summed per SWAT+ channel through the channel map (`all:<channel>`,
+  or a CSV of RIV cells by channel). The driver adds one point source (`gw_<channel>`) and one place of use
+  (`seep_<channel>`) per coupled channel to the run's copy of the project.
+- **Gaining reaches.** A net discharge to the stream enters the channel as a point source on day *d*+1.
+- **Losing reaches.** A net leakage from the stream is taken from the channel on day *d*+1 as a water allocation
   demand. A negative point source would not work: SWAT+ 62.0.1 records a negative point source in full even when the
-  channel can't supply it. If the channel can't supply the demand, the shortfall is entered in the ledger and
-  MODFLOW 6's stage for that reach is lowered for the next day.
-- **Stage.** MODFLOW 6's river stage for day *d* comes from SWAT+'s channel on day *d*−1. That needs channel depth
-  through BMI, which is a request to swatplus-bmi.
-- **Timing.** The exchange is explicit with a one-day lag. Volume is conserved exactly (ledger pairs); timing shifts by
-  a day, which is small against the time scales of groundwater response. Iterating within the day by branching SWAT+
+  channel can't supply it.
+- **Shortfalls.** Where the channel can't supply a losing reach's demand, the shortfall is entered in the ledger. That
+  is water MODFLOW 6 took from a stream that, in SWAT+, wasn't there. In the synthetic two-way example it is 186 m³
+  over three years, against about 61,000 m³ of exchange. The next step is to lower the reach's stage for the next day
+  when it happens.
+- **Stage.** MODFLOW 6's river stage is fixed in its input for now. Taking it from SWAT+'s channel on day *d*−1 needs
+  channel depth through BMI, which is a request to swatplus-bmi.
+- **Timing.** The exchange is explicit with a one-day lag. Volume is conserved (ledger pairs): each day's exchange is
+  due in SWAT+ the next day, and the last day's is reported as in transit. Timing shifts by a day, which is small
+  against the time scales of groundwater response. Iterating within the day by branching SWAT+
   is possible but costs a SWAT+ day per iteration. It will be tried if the lag matters for an example's question.
 - **Mapping.** Channels map to cells by length (`object, layer, row, col, length_m`). Conductance comes from the
   MODFLOW 6 model, not from the map.
@@ -316,10 +372,14 @@ The ledger enters, every day, each transfer as sent and as received, plus each c
 
 - **Held now, by tests on the synthetic example:**
   - recharge sent = received, against SWAT+'s printed aquifer recharge and MODFLOW 6's budget file;
-  - well pumping requested = pumped = withdrawn by users;
+  - every route: requested = delivered (+ shortfall for SWAT+ withdrawals), and never more delivered than asked;
+  - the channel's outflow changes, the same day, by what the users' routes put in and took out;
+  - the utility chain: production = delivery + losses = the sum of its sources; sewer = outfall;
   - each user's withdrawal + gain = consumption + return, every hour and every day;
-  - user returns = outfall volumes;
-  - MODFLOW 6's budget (storage, recharge, wells, river) closes every day to 1e-7 of the gross flow.
+  - two-way: SWAT+'s aquifer returns nothing and stores exactly its recharge; each day's river exchange arrives in
+    SWAT+ the next day, whole, with any shortfall reported;
+  - MODFLOW 6's budget (storage, recharge, wells, river) closes every day to 1e-7 of the gross flow;
+  - restarts: a run saved and carried on matches the unbroken run bit for bit.
 - **Quality.** Constituents are masses (kg), never concentrations, across every transfer:
   - a user's return carries its loads (dissolved solids concentrated by evaporation, a cooling tower's blowdown) to the
     outfall;
@@ -335,7 +395,16 @@ The ledger enters, every day, each transfer as sent and as received, plus each c
 ## Calibration
 
 Using Basin Ledger depends on calibrated models. Calibration is part of every example, not something a study adds
-later. The tooling is a later module (`calibration.py`, stubbed); this section is its design.
+later. `calibration.py` has the structure:
+
+- the record and its status;
+- parameter and observation tables;
+- simulated values at observations;
+- the statistics;
+- a forward model that runs the driver.
+
+Applying parameters to the models' files, PEST++ files and USGS downloads are stubbed. This section is the whole
+design.
 
 **Parameters.** The engine exposes each model's adjustable parameters as one named list, with bounds:
 
@@ -364,10 +433,11 @@ later. The tooling is a later module (`calibration.py`, stubbed); this section i
   - MODFLOW 6 against heads and base flow, with SWAT+'s calibrated recharge as its input.
 - **Feedback** (two-way exchange, curtailment, drawdown limits): the models are calibrated jointly.
   - The individual calibrations give the prior.
-  - [PEST++ IES](https://github.com/usgs/pestpp) runs Basin Ledger's driver as the forward model. The planned command
-    is `python -m basinledger run basin.toml --parameters pars.csv --observations obs.csv`. It applies a parameter
-    set, runs every model through the driver, and writes the simulated values at every observation for PEST++ to
-    read.
+  - [PEST++ IES](https://github.com/usgs/pestpp) runs Basin Ledger's driver as the forward model,
+    `calibration.run_forward_model(basin.toml, parameters.csv, observations.csv, simulated.csv)`. It applies a
+    parameter set through the driver's `prepare` hook, on the run's copy of each model's files before it starts. It
+    then runs every model and writes the simulated value at every observation for PEST++ to read. Applying
+    parameters is the part still to build.
   - The adjustable parameters are those the feedback touches: streambed conductance, aquifer hydraulic conductivity
     and specific yield near streams, and SWAT+'s percolation and channel parameters.
   - IES gives an ensemble, so results can carry its spread.
@@ -399,20 +469,27 @@ source). All of them start from one warm-up:
 - **SWAT+:** `branch()` copies the paused SWAT+ process with fork (Mac, Linux), and `save_state()` writes it to a
   folder (any platform). Both are exact (swatplus-bmi's tests).
 - **MODFLOW 6:** its state is its heads, plus the stages and storages of advanced packages (SFR, MAW, UZF) if used.
-  At the end of the warm-up the driver saves heads (`X`) and those states. Each scenario starts a new MODFLOW 6
-  process from them: a TDIS beginning on the branch day, the saved heads as initial conditions. A test will check that
-  a restarted run equals the unbroken run to solver tolerance.
+  At the end of the warm-up the driver saves heads (`X`). Each scenario starts a new MODFLOW 6 simulation covering
+  only the days left: the example's builder is called for them, or a copied model's single stress period is
+  shortened. The saved heads are then put straight into memory after initialize, not into the IC file, which would
+  round them. Restarted runs match the unbroken run bit for bit (built and tested). Models with several stress periods
+  need their period data re-keyed, which isn't built yet. Advanced packages will need their own state saved.
 - **Water users:** a component's state, if any, is saved through `get_state`/`set_state` where the component offers
   them (CSDMS bmi PR #112). `CoolingWaterBmi` keeps no state between hours.
-- **Driver:** the ledger and the rules' memory are saved with the rest.
+- **Driver:** the ledger, the series, the rules' memory and the exchange due are saved with the rest
+  (`Basin.save`, `Basin(..., restart=...)`, `--save-at`/`--restart` on the command line). The users are stepped
+  forward to the restart day, which reproduces a deterministic component exactly.
 
-Scenarios then run in parallel, each in its own process.
+Scenarios then run in parallel, each in its own process. `branch()` (fork) isn't used by the driver yet, because
+libmf6 lives in the driver's process. A branch would need MODFLOW 6 restarted from heads in the child process.
 
 ## Examples and private studies
 
-- **Synthetic** (`examples/synthetic`, built): SWAT+'s bundled Osu_1hru project (10 ha, 2010–2023) supplies a daily
-  recharge rate, spread over a 41 × 41 MODFLOW 6 grid of 50 m cells with a river along one edge. The synthetic user
-  pumps one well. It exists for the tests and the notebook. Its places and numbers mean nothing.
+- **Synthetic** (`examples/synthetic`, built): SWAT+'s bundled Osu_1hru project (10 ha, 2010–2023), with three
+  configs. In `basin.toml` its recharge rate is spread over a 41 × 41 MODFLOW 6 grid of 50 m cells with a river along
+  one edge, and a synthetic user pumps one well. `surface.toml` adds a river user, a utility and rules. `two_way.toml`
+  couples Osu_1hru both ways with a 10 ha aquifer. It exists for the tests and the notebook. Its places and numbers
+  mean nothing.
 - **Plaster Creek** (`examples/plaster-creek`, planned): Plaster Creek in Kent County, Michigan, with a data center
   campus.
   - **Models:** SWAT+ on the hydrofabric catchments; MODFLOW 6 cut from a regional model; `CoolingWaterBmi` for the
@@ -435,17 +512,32 @@ Scenarios then run in parallel, each in its own process.
 
 ## What's next
 
-1. The driver's command line and run outputs (daily tables per account, heads at named cells), and the utility chain
-   with its ledger pairs.
-2. `CoolingWaterBmi` limit and dry-mode inputs (a request to `waterledger-models`), then the rules: curtailment,
-   dry mode, drawdown limit.
-3. Surface routes through SWAT+: water allocation demand for intakes, point sources for outfalls, with loads.
-4. Two-way stream-aquifer exchange (RIV, then SFR), with the SWAT+ aquifer set to pass recharge through.
-5. MODFLOW 6 restart from saved heads for scenarios, and the test that restarts match unbroken runs.
+Done on the synthetic examples (Nov 4, 2026):
+
+- the command line and outputs;
+- the utility chain;
+- the rules;
+- surface routes;
+- the two-way RIV exchange;
+- MODFLOW 6 restarts;
+- the calibration module's structure.
+
+Next:
+
+1. `CoolingWaterBmi` limit and dry-mode inputs (asked of `waterledger-models`), then the rules on a real cooling user.
+2. Loads on surface routes: point source constituents and temperature (asked of swatplus-bmi), and intake
+   concentrations on users.
+3. Two-way refinements:
+   - stage from SWAT+'s channel depth (asked of swatplus-bmi);
+   - lowering the stage after a shortfall;
+   - SFR for routed streams;
+   - leaks and infiltration in the chain exchanged with MODFLOW 6.
+4. Restarts for MODFLOW 6 models with several stress periods; scenarios in parallel processes from one saved
+   warm-up.
+5. Applying calibration parameters (SWAT+ `calibration.cal`, MODFLOW 6 arrays with pyEMU), PEST++ IES files, USGS
+   observations.
 6. AORC forcing for SWAT+ and the users; the SWAT+ project builder on the hydrofabric, with outputs at every nexus.
-7. The calibration module: parameters, observations from USGS, the record, and PEST++ IES with the driver as the
-   forward model.
-8. Plaster Creek as the first public example, calibrated.
+7. Plaster Creek as the first public example, calibrated.
 
 ## References
 
