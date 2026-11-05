@@ -1,7 +1,12 @@
 # Plaster Creek groundwater model (screening)
 
 A MODFLOW 6 model under the calibrated NextGen surface, built from public data. Its status is screening: it isn't
-fitted yet. Streamflow at the gage stays the only calibrated part of the example. The demo that uses it is in
+fitted yet. Streamflow at the gage stays the only calibrated part of the example.
+
+Its recharge, CFE's percolation from NextGen, is an interim forcing. In Basin Ledger, recharge comes from SWAT+, which
+carries water quality. NextGen stays as a comparison. The calibration order is SWAT+ alone, then MODFLOW 6 under
+SWAT+'s recharge, then both linked (`../PROGRESS.md`, `docs/design.md`). The SWAT+ project for Plaster Creek doesn't
+exist yet. The demo that uses it is in
 `docs/plaster-creek-demo.md`. Progress and how to resume are in `../PROGRESS.md`.
 
 ## Build
