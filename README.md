@@ -71,7 +71,8 @@ any place or any kind of water user.
 
 ## Install
 
-Needs Python 3.11 or later, [uv](https://docs.astral.sh/uv/), and gfortran for SWAT+ (on macOS, Homebrew's `gcc`).
+Needs Python 3.11 or later, [uv](https://docs.astral.sh/uv/), and gfortran for SWAT+ (on macOS, Homebrew's `gcc`). netCDF4, for NextGen runs, has wheels for Linux, Windows and macOS 15 or later. On macOS 14 it builds from source and
+needs `brew install netcdf`.
 
 ```bash
 git clone https://github.com/northlinehydrology/basin-ledger && cd basin-ledger
