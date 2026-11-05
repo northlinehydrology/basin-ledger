@@ -21,7 +21,7 @@ what, why, and how Basin Ledger copes until then. Written Nov 4, 2026.
    - *Heat the installed dry and chiller capacity can't take is reported as heat not removed (IT load that would
      have to be shed), never dropped.*
    - *Energy and water balances close every hour.*
-   - *Return load = intake concentration × (withdrawal − evaporation − drift's share).*
+   - *Return load = intake concentration × withdrawal × (1 − drift's share of the dissolved mass), about 0.1% for drift. Evaporation carries no dissolved solids, so all of the intake's mass leaves in blowdown and drift; blowdown concentration is the intake's times the cycles of concentration (waterledger design 0006).*
 3. **A dry-mode input on `CoolingWaterBmi`**, for days a rule calls for no evaporative cooling. It may be the same
    mechanism as the limit, with a limit of zero for cooling water.
 4. **Intake concentrations and return loads.** For quality balances, a user needs the concentration of what it takes
