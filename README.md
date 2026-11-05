@@ -44,9 +44,10 @@ estimates one campus's water from public data. Basin Ledger follows that water t
 Examples:
 
 - **synthetic:** SWAT+'s Osu_1hru with small MODFLOW 6 models, for the tests;
-- **[Plaster Creek](examples/plaster-creek/), Michigan:** calibrated NextGen streamflow at USGS 04119055 (KGE 0.87
-  calibration, 0.81 validation, from [nextgen-michigan](https://github.com/northlinehydrology/nextgen-michigan)),
-  with an assumed campus on utility water. Only the streamflow at the gage is calibrated.
+- **[Plaster Creek](examples/plaster-creek/), Michigan:** the worked example below;
+- **[Michigan cold-stream screen](examples/michigan-cold-streams/):** a script that scores Michigan's gaged basins for
+  a cold-stream study from public data. A worked example on the Dowagiac River, a groundwater-fed trout stream in
+  southwest Michigan, is planned.
 
 Still to come ([docs/design.md](docs/design.md)):
 
@@ -73,6 +74,39 @@ A NextGen run takes SWAT+'s place as a replay. It gives calibrated flows on Next
 Places are examples, not code. Each example (`examples/<place>/`) is one config file that wires real models for one
 basin and its users, plus a script that fetches its public data and a short write-up. The engine knows nothing about
 any place or any kind of water user.
+
+## Worked example: Plaster Creek
+
+![Plaster Creek at the gage, with and without a campus well](https://raw.githubusercontent.com/northlinehydrology/basinledger/main/docs/figures/plaster-demo-hydrograph.png)
+
+An assumed 300 MW campus on its own well cuts Plaster Creek's 7-day low flow at USGS 04119055 by 43 L/s (27%) in the
+driest year of the run. MODFLOW 6 takes 63% of the pumping from the streams in the last year. Glover's method, with
+nextgen-michigan's screening settings, gives 89%. On utility water from Lake Michigan the creek sees nothing.
+
+- **Calibrated:** streamflow at the gage (NextGen, KGE 0.87 in calibration and 0.81 in validation, from
+  [nextgen-michigan](https://github.com/northlinehydrology/nextgen-michigan)).
+- **Not calibrated:** the MODFLOW 6 model (heads RMSE 7.9 m over 55 wells; base flow too steady at low flow), the
+  campus, which is an assumption, and water quality, which isn't run yet.
+
+```bash
+uv sync --group gis --group examples
+uv run python examples/plaster-creek/fetch.py                     # checks for the NextGen run; says how to build it
+uv run --group gis python examples/plaster-creek/groundwater/fetch.py
+uv run --group gis python -W ignore examples/plaster-creek/groundwater/prepare.py
+uv run --group gis --group examples python -W ignore examples/plaster-creek/demo.py
+```
+
+The NextGen run comes from nextgen-michigan (Docker, a few hours). Results are in
+[docs/plaster-creek-demo.md](docs/plaster-creek-demo.md).
+
+Open problems:
+
+- fitting the groundwater model to heads and base flow, starting with streambed conductance, which moves the answer
+  most;
+- a longer forcing record that includes the 2012 drought;
+- stream temperature from the change in groundwater inflow;
+- water quality through SWAT+ on the same catchments, against the Plaster Creek TMDL;
+- existing high-capacity wells, and more kinds of water users.
 
 ## Install
 
@@ -228,6 +262,11 @@ Basin Ledger was designed and directed by Andrew Sommerlot and built with an AI 
 Anthropic), which wrote most of the code, tests and documentation under his direction and review. Whether it is right
 rests on the tests: each model's own budget closes, and every transfer is checked against what the other model
 received.
+
+## Contact
+
+Basin Ledger is built by Northline Hydrology. To work on an example or an open problem, write to Andrew Sommerlot at
+andrew@northlinehydrology.com or open an issue.
 
 ## License
 
