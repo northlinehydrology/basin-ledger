@@ -26,7 +26,7 @@ jobs:
           brew list gcc >/dev/null 2>&1 || brew install gcc
           echo "FC=$(ls "$(brew --prefix)"/bin/gfortran-* | sort -V | tail -1)" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --locked
+      - run: uv sync --locked --group gis
       - name: SWAT+ (swatplus-bmi build) and libmf6 (get-modflow)
         env:
           GITHUB_TOKEN: ${{ github.token }}

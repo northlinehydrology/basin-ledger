@@ -29,7 +29,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: The newest releases of every dependency
         run: |
-          uv sync --upgrade
+          uv sync --upgrade --group gis
           uv pip list | grep -i -E "swatplus|waterledger|flopy|modflowapi|xmipy|netcdf4|numpy"
       - name: SWAT+ (swatplus-bmi build) and the newest MODFLOW 6 (get-modflow)
         env:
