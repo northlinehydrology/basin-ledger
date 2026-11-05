@@ -1,0 +1,54 @@
+name = "plaster-creek-groundwater"
+description = """Plaster Creek with a screening MODFLOW 6 groundwater model under the calibrated NextGen surface.
+Recharge is CFE's daily percolation; river stages follow t-route's depth. The assumed 300 MW campus is on utility
+water from outside the basin. Groundwater is screening: not yet calibrated."""
+
+[run]
+folder = "../../runs/plaster-creek-groundwater"
+
+[nextgen]
+# the calibrated baseline rerun with CFE's percolation in its outputs (groundwater/rerun_nextgen.py)
+run = "{cache}/plaster-creek/nextgen-recharge"
+
+[calibration]
+record = "calibration/record.toml"
+
+[modflow6]
+builder = "groundwater/model:build"   # from groundwater/prepare.py's arrays
+
+[recharge]
+package = "rch"
+# catchments to cells by area; buffer cells take their nearest catchment's rate [A], so the mapped areas exceed the
+# catchments' and no area check is made
+map = "maps/catchment_cells.csv"
+
+[rivers]
+package = "riv"
+map = "maps/river_cells.csv"
+stage = "nextgen_depth"
+bed_thickness = 1.0                   # m [A]
+
+[[wells]]
+name = "campus"
+package = "wel"
+cell = [1, 70, 57]                    # layer 2, 500 m from the nearest river cell (groundwater/prepare.py)
+
+[[utilities]]
+name = "grand-rapids"
+sources = [{route = "offsite:supply", share = 1.0}]
+losses = 0.10                         # [A]
+outfall = "offsite:wastewater-plant"
+
+[outputs]
+channels = ["wb-652056", "wb-652066"]
+heads = [{name = "campus-well", cell = [1, 70, 57]}]
+
+[[users]]
+name = "campus"
+component = "waterledger_models.datacenter.bmi:CoolingWaterBmi"
+config = "campus.yaml"
+withdrawal = "utility:grand-rapids"
+return = "utility:grand-rapids"
+forcing = {source = "nextgen", catchment = "cat-652066"}
+variables = {withdrawal = "data_center_cooling_water__withdrawal_volume_flux", consumption = "data_center_cooling_water__consumption_volume_flux", return = "data_center_cooling_water__return_volume_flux", gain = "data_center_cooling_water__condensate_volume_flux", power = "data_center__electric_power"}
+constituents = {}
