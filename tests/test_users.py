@@ -139,3 +139,18 @@ def test_cooling_water_bmi_plugs_in_without_engine_changes(tmp_path):
     assert abs(use.imbalance) <= 1e-9 * use.withdrawal
     assert use.energy > 0
     assert wu.bmi.get_current_time() == pytest.approx(86400.0)
+
+
+def test_reported_user_replays_its_series(tmp_path):
+    from basinledger.generic import ReportedUser, write_series
+    write_series(tmp_path / "s.csv", ["2020-01-02", "2020-01-03"], [100.0, 250.0], [30.0, 50.0])
+    (tmp_path / "u.toml").write_text('series = "s.csv"\nstart = "2020-01-01"\n')
+    wu = WaterUser("ghost", ReportedUser(), str(tmp_path / "u.toml"), constituents={})
+    days = [wu.advance_day(d) for d in range(4)]
+    assert [round(x.withdrawal, 9) for x in days] == [0.0, 100.0, 250.0, 0.0]
+    assert days[2].consumption == pytest.approx(50.0) and days[2].returned == pytest.approx(200.0)
+    bad = tmp_path / "bad.csv"
+    bad.write_text("date,withdrawal_m3,consumption_m3,return_m3\n2020-01-02,100,30,60\n")
+    (tmp_path / "b.toml").write_text('series = "bad.csv"\nstart = "2020-01-01"\n')
+    with pytest.raises(ValueError, match="withdrawal != consumption"):
+        WaterUser("bad", ReportedUser(), str(tmp_path / "b.toml"), constituents={})
