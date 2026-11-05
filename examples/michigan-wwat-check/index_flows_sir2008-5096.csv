@@ -1,0 +1,151 @@
+# Index flows (IQ50) at 147 Michigan gages, Hamilton and others (2008), USGS SIR 2008-5096, table 1.
+# Median daily flow of the lowest of July, August and September, period of record through water year 2005.
+# Transcribed from the report PDF with pdftotext; drainage_sqmi in square miles, iq50_cfs in cubic feet per second.
+station,name,drainage_sqmi,iq50_cfs,month,years
+04001000,"Washington Creek at Windigo, Mich.",13.2,2.3,August,39
+04031000,"Black River near Bessemer, Mich.",200,40.0,August,33
+04031500,"Presque Isle River at Marenisco, Mich.",172,71.0,August,38
+04032000,"Presque Isle River near Tula, Mich.",264,90.0,August,29
+04033000,Middle Branch Ontonagon River near Pauld-,162,100,August,59
+04035000,"East Br Ontonagon River near Mass, Mich.",273,134,August,38
+04040000,"Ontonagon River near Rockland, Mich",1330,634,August,64
+04040500,"Sturgeon River near Sidnaw, Mich.",169,44.0,August,66
+04041500,"Sturgeon River near Alston, Mich.",343,184,August,72
+04043050,"Trap Rock River near Lake Linden, Mich.",29.6,13.0,August,39
+04045500,"Tahquamenon River near Paradise, Mich.",757,321,August,52
+04046000,"Black River near Garnet, Mich.",33.5,10.0,August,38
+04049500,"Manistique River at Germfask, Mich.",420,238,August,33
+04055000,"Manistique River near Blaney, Mich.",716,352,August,33
+04056000,West Branch Manistique River near Manis-,326,154,August,19
+04056500,"Manistique River near Manistique, Mich.",1130,605,August,68
+04057510,"Sturgeon River near Nahma Junction, Mich.",184,82.0,August,39
+04057800,"Middle Branch Escanaba River at Humboldt,",45.7,16.0,August,47
+04058000,"M Br Escanaba River near Ishpeming, Mich.",128,43.0,August,22
+04058400,"Goose Lake Outlet near Sands Station, Mich.",36.3,12.0,August,17
+04059000,"Escanaba River at Cornell, Mich.",871,330,August,55
+04059500,"Ford River near Hyde, Mich.",444,85.0,August,51
+04060993,"Brule River near Florence, Wisc.",378,236,August,62
+04061500,"Paint River at Crystal Falls, Mich.",600,288,August,52
+04062200,"Peshekee River near Champion, Mich.",132,28.0,August,23
+04096015,"Galien River near Sawyer, Mich.",80.8,21.0,September,11
+04096405,"St. Joseph River at Burlington, Mich.",201,61.0,September,43
+04096515,"South Branch Hog Creek near Allen, Mich.",48.7,7.9,September,36
+04096600,"Coldwater River near Hodunk, Mich.",286,65.0,September,27
+04096900,"Nottawa Creek near Athens, Mich.",162,72.0,September,31
+04097170,"Portage River near Vicksburg, Mich.",68.2,30.0,September,21
+04097540,"Prairie River near Nottawa, Mich.",107,46.0,September,43
+04099000,"St. Joseph River at Mottville, Mich.",1880,850,September,82
+04101500,"St. Joseph River at Niles, Mich.",3670,1850,September,75
+04101800,"Dowagiac River at Sumnerville, Mich.",252,177,August,45
+04102500,"Paw Paw River at Riverside, Mich.",390,262,August,54
+04102700,"South Branch Black River near Bangor,",83.5,35.0,September,40
+04103010,"Kalamazoo River near Marengo, Mich.",270,147,September,19
+04104945,"Wanadoga Creek near Battle Creek, Mich.",48.3,15.0,August,11
+04105000,"Battle Creek at Battle Creek, Mich.",274,70.0,September,72
+04105700,"Augusta Creek near Augusta, Mich.",36.8,31.0,August,41
+04108600,"Rabbit River near Hopkins, Mich.",65.1,22.0,September,40
+04108801,"Macatawa River near Zeeland, Mich.",66.9,4.3,September,45
+04110000,"Orchard Creek at Munith, Mich.",47.3,5.3,September,13
+04111500,"Deer Creek near Dansville, Mich.",16.3,0.9,September,52
+04112000,"Sloan Creek near Williamston, Mich.",10.4,0.2,September,52
+04112500,"Red Cedar River at East Lansing, Mich.",344,38.0,September,77
+04114498,"Looking Glass River near Eagle, Mich.",284,40.0,September,57
+04115000,"Maple River at Maple Rapids, Mich.",420,30.0,September,62
+04116500,"Flat River at Smyrna, Mich.",516,222,August,36
+04117000,"Quaker Brook near Nashville, Mich.",7.8,2.8,September,33
+04117500,"Thornapple River near Hastings, Mich.",410,109,September,61
+04118000,"Thornapple River near Caledonia, Mich.",795,281,September,41
+04118500,"Rogue River near Rockford, Mich.",257,127,September,50
+04121000,"Muskegon River near Merritt, Mich.",352,115,August,27
+04121300,"Clam River at Vogel Center, Mich.",239,73.0,August,40
+04121900,"Little Muskegon River near Morley, Mich.",136,72.0,July,30
+04122100,"Bear Creek near Muskegon, Mich.",16.7,5.0,August,40
+04122200,"White River near Whitehall, Mich.",404,273,August,49
+04122500,"Pere Marquette River at Scottville, Mich.",689,455,August,67
+04123000,"Big Sable River near Freesoil, Mich.",115,101,August,32
+04123500,"Manistee River near Grayling, Mich.",132,170,August,31
+04124000,"Manistee River near Sherman, Mich.",865,856,August,86
+04124500,"East Branch Pine River near Tustin, Mich.",58.9,9.9,August,26
+04125000,"Pine River near Leroy, Mich.",130,51.0,August,12
+04125500,"Pine River near Hoxeyville, Mich.",254,230,August,31
+04126200,"Little Manistee River near Freesoil, Mich.",185,141,August,19
+04127918,"Pine River near Rudyard, Mich.",202,77.0,August,34
+04127997,"Sturgeon River at Wolverine, Mich.",181,170,August,64
+04128990,"Pigeon River near Vanderbilt, Mich.",57.7,58.0,July,55
+04133501,Thunder Bay River at Herron Road near,586,309,September,40
+04135000,"Thunder Bay River near Alpena, Mich.",1240,474,August,22
+04135500,"Au Sable River at Grayling, Mich.",96.6,61.0,August,51
+04135600,"East Branch Au Sable River at Grayling,",71.2,34.0,August,27
+04135700,"South Branch Au Sable River near Luzerne,",391,134,August,38
+04136500,"Au Sable River at Mio, Mich.",1360,788,August,54
+04137500,"Au Sable R near Au Sable, Mich.",1740,1120,September,19
+04138000,"East Branch Au Gres River at McIvor, Mich.",89.9,38.0,August,23
+04138500,"Au Gres River near National City, Mich.",151,21.0,August,31
+04139000,"Houghton Creek near Lupton, Mich.",29.8,39.0,August,23
+04139500,"Rifle River at “The Ranch” near Lupton,",57.4,66.0,August,22
+04140000,"Prior Creek near Selkirk, Mich.",21.0,6.7,August,22
+04140500,"Rifle River at Selkirk, Mich.",116,87.0,August,32
+04141000,"South Branch Shepards Creek near Selkirk,",1.1,0.0,July,27
+04141500,"West Branch Rifle River near Selkirk, Mich.",65.4,32.0,July,12
+04142000,"Rifle River near Sterling, Mich.",333,159,August,69
+04143900,"Shiawassee River at Linden, Mich.",81.9,22.0,August,30
+04144000,"Shiawassee River at Byron, Mich.",363,71.0,September,36
+04144500,"Shiawassee River at Owosso, Mich.",530,86.0,September,75
+04145500,"Bad River near Brant, Mich.",89.9,0.6,August,11
+04146000,"Farmers Creek near Lapeer, Mich.",51.1,5.1,August,73
+04146063,"South Branch Flint River near Columbiaville,",211,48.5,August,26
+04147500,"Flint River near Otisville, Mich.",526,109,August,52
+04147990,"Butternut Creek near Genesee, Mich.",34.8,3.6,August,14
+04148140,"Kearsley Creek near Davison, Mich.",99.7,13.0,August,40
+04148160,"Gilkey Creek near Flint, Mich.",6.9,0.2,August,14
+04148200,"Swartz Creek near Holly, Mich.",12.1,1.5,September,20
+04148300,"Swartz Creek at Flint, Mich.",114,5.6,August,14
+04148440,"Thread Creek near Flint, Mich.",54.4,4.7,August,14
+04148500,"Flint River near Flint, Mich.",960,171,August,73
+04150000,"South Branch Cass River near Cass City,",239,5.0,September,32
+04150500,"Cass River at Cass City, Mich.",363,11.0,September,55
+04151500,"Cass River at Frankenmuth, Mich.",842,64.0,September,69
+04152238,"South Branch Tobacco River near Beaverton,",152,63.0,September,19
+04153500,"Salt River near North Bradley, Mich.",145,8.5,August,38
+04154000,"Chippewa River near Mount Pleasant, Mich.",409,150,August,73
+04155000,"Pine River at Alma, Mich.",309,80.0,August,75
+04157500,"State Drain near Sebewaing, Mich.",67.3,0,August,15
+04158000,"Columbia Drain near Sebewaing, Mich.",33.9,0,August,18
+04158500,"Pigeon River near Owendale, Mich.",53.3,3.0,September,30
+04159492,"Black River near Jeddo, Mich.",479,22.0,September,62
+04159900,"Mill Creek near Avoca, Mich.",169,6.8,September,31
+04160000,"Mill Creek near Abbottsford, Mich.",184,8.5,August,18
+04160050,"Black River near Port Huron, Mich.",683,19.0,September,11
+04160570,"North Branch Belle River at Imlay City,",16.1,2.3,August,36
+04160600,"Belle River at Memphis, Mich.",151,13.0,September,43
+04160800,"Sashabaw Creek near Drayton Plains, Mich.",21.0,2.2,September,46
+04160900,"Clinton River near Drayton Plains, Mich.",78.5,14.0,August,46
+04161000,"Clinton River at Auburn Hills, Mich.",123,44,August,34
+04161100,"Galloway Creek near Auburn Heights, Mich.",17.4,1.6,August,32
+04161500,"Paint Creek near Lake Orion, Mich.",39.8,9.0,August,23
+04161540,"Paint Creek at Rochester, Mich.",71.8,21.0,August,46
+04161580,"Stony Creek near Romeo, Mich.",23.8,3.9,August,41
+04161800,"Stony Creek near Washington, Mich.",69.1,13.0,August,48
+04163400,"Plum Brook at Utica, Mich.",16.6,2.8,August,40
+04163500,"Plum Brook near Utica, Mich.",23.8,0.7,July,13
+04164100,"East Pond Creek at Romeo, Mich.",20.8,4.9,August,47
+04164300,"East Branch Coon Creek at Armada, Mich.",12.8,0.2,August,47
+04164500,North Branch Clinton R near Mount,198,12.0,September,59
+04164800,"Middle Branch Clinton River at Macomb,",41.2,3.5,September,19
+04166000,"River Rouge at Birmingham, Mich.",36.7,6.2,September,56
+04166200,"Evans Ditch at Southfield, Mich.",10.2,1.9,September,48
+04166300,"Upper River Rouge at Farmington, Mich.",17.6,4.1,September,48
+04169500,"Huron River at Commerce, Mich.",49.9,12.0,August,30
+04170000,"Huron River at Milford, Mich.",139,46.0,August,57
+04170500,"Huron River near New Hudson, Mich.",155,54.0,August,57
+04171500,"South Ore Creek near Brighton, Mich.",33.3,7.4,September,18
+04172000,"Huron River near Hamburg, Mich.",320,103,September,54
+04173000,"Huron River near Dexter, Mich.",538,120,August,29
+04173500,"Mill Creek near Dexter, Mich.",131,23.0,September,42
+04174500,"Huron River at Ann Arbor, Mich.",747,147,August,91
+04174800,"Huron River at Ypsilanti, Mich.",817,235,August,16
+04175600,"River Raisin near Manchester, Mich.",128,32.0,August,33
+04175700,"River Raisin near Tecumseh, Mich.",266,62.5,August,24
+04176000,"River Raisin near Adrian, Mich.",460,98.5,September,46
+04176605,"Otter Creek at Lasalle, Mich.",63.7,1.7,September,18
+04184500,"Bean Creek at Powers, Ohio",205,19.0,September,65
