@@ -94,11 +94,9 @@ stage 1.
   (`[rivers] stage = "surface_depth"`). The point-source path stays for 0.1.x.
 - **Tested** against a 0.2.0 build in a scratch folder: the exchange and restart tests pass, and the totals match the
   point-source path to the cubic meter.
-- **When 0.2.0 is on PyPI:**
-  1. require `swatplus-bmi>=0.2` and run `uv lock`;
-  2. rebuild SWAT+ (`uv run swatplus-bmi build --jobs 2`);
-  3. add `[rivers] stage = "surface_depth"` to `examples/synthetic/two_way.toml`;
-  4. note it in `docs/design.md`'s two-way section.
+- **On PyPI, November 5:** Basin Ledger now requires swatplus-bmi 0.2 and the default SWAT+ build is rebuilt. All 81
+  tests pass. The synthetic two-way example keeps a fixed stage, so it still has losing reaches. With
+  `stage = "surface_depth"`, Osu_1hru's centimeter-deep channel would only gain.
 
 ## Next
 
