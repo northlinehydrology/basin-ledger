@@ -47,6 +47,11 @@ recorded here with its date and reason.
   Candidates are ordered by the number of top-quarter scores, then by the mean of the five ranks.
 - **Step 2 set.** The top five candidates, and two controls: the two eligible basins with the lowest mean rank.
 
+Added Nov 5, 2026, after the first run. At three eligible basins (Boardman, Iron, Pine at High School Bridge) the
+layer gives the gage's segment no zone lines (see WWAT layer below), so measure 1 is missing. A missing measure is
+left unranked and the mean rank is taken over the measures present. Candidates and controls must have all five,
+because step 2 needs measure 1 at every basin it checks.
+
 ## Measures
 
 1. **Median summer only.** The largest depletion that stays out of Zone D at the gage's WWAT segment, as a share of
@@ -62,7 +67,11 @@ recorded here with its date and reason.
    of the basin).
 5. **Flow, not temperature.** Cold-transitional share of the basin's WWAT stream length.
 
-Results are keyed to the USGS gage, its NHDPlus basin and its NextGen hydrofabric flowpath and nexus (v2.2).
+Results are keyed to the USGS gage, its NHDPlus COMID and its NextGen hydrofabric flowpath and nexus (v2.2).
+
+Two more measures are recorded but not scored. They were added after the rule was written: the length of the
+basin's WWAT segments with no zone lines, and the share of its WWAT length where a bedrock well passes without a
+depletion estimate (bedrock categories −1 and 1; Reeves and others, 2009, table 1).
 
 ## References
 
