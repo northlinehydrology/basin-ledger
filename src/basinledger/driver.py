@@ -68,13 +68,16 @@ class Basin:
         # the surface model: SWAT+ from a copy of the project with the objects the run needs, or a NextGen run
         ex = cfg.exchange
         swat_dir = None
+        self.direct_exchange = False
         if cfg.surface == "swatplus":
             swat_dir = self.folder / "swatplus"
             shutil.copytree(cfg.swat_project, swat_dir)
             channels = S._channels(swat_dir)
             ex_channels = self._exchange_channels(ex) if ex else []
-            places = list(cfg.places_of_use) + [(f"seep_{c}", c) for c in ex_channels]
-            points = list(cfg.point_sources) + [(f"gw_{c}", c) for c in ex_channels]
+            self.direct_exchange = bool(ex) and S.has_groundwater_exchange()
+            via_routes = [] if self.direct_exchange else ex_channels  # before 0.2.0: a point source and a seep per channel
+            places = list(cfg.places_of_use) + [(f"seep_{c}", c) for c in via_routes]
+            points = list(cfg.point_sources) + [(f"gw_{c}", c) for c in via_routes]
             if places:
                 S.add_places_of_use(swat_dir, places)
             if points:
@@ -127,10 +130,11 @@ class Basin:
         elif cfg.wells or ex or cfg.outputs.get("heads") or cfg.rivers:
             raise ValueError("wells, rivers, the two-way exchange and head outputs need a [modflow6] model")
         self.rivers = None  # built on the first day, once MODFLOW 6's river package has its entries
-        if cfg.rivers and cfg.rivers.get("stage", "fixed") not in ("fixed", "nextgen_depth"):
-            raise ValueError("[rivers] stage must be fixed or nextgen_depth")
-        if cfg.rivers and cfg.rivers.get("stage") == "nextgen_depth" and cfg.surface != "nextgen":
-            raise ValueError("[rivers] stage = nextgen_depth needs a [nextgen] surface model")
+        if cfg.rivers and cfg.rivers.get("stage", "fixed") not in ("fixed", "surface_depth", "nextgen_depth"):
+            raise ValueError("[rivers] stage must be fixed or surface_depth")
+        if cfg.rivers and cfg.rivers.get("stage") in ("surface_depth", "nextgen_depth") and not self.sw.has(S.DEPTH):
+            raise ValueError("[rivers] stage = surface_depth needs the surface model's channel depth "
+                             "(NextGen's t-route, or swatplus-bmi 0.2.0)")
 
         self.ledger = Ledger()
         L = self.ledger
@@ -152,8 +156,9 @@ class Basin:
             self.due = dict(saved["exchange_due"])
         if ex:
             for c in ex_channels:
-                self.router.check(f"swat:point_source:gw_{c}")
-                self.router.check(f"swat:place_of_use:seep_{c}")
+                if not self.direct_exchange:
+                    self.router.check(f"swat:point_source:gw_{c}")
+                    self.router.check(f"swat:place_of_use:seep_{c}")
                 k = f"exchange:{c}:"
                 L.pair(k + "due", [k + "applied", k + "shortfall"], rtol=FLOAT32)
             L.zero("swatplus:aquifer_outflow", atol=1e-9)
@@ -245,9 +250,8 @@ class Basin:
             self.rivers = (pkg, cmap, self.mf6.get("RBOT", self.mf6.model, pkg.upper()).astype(float),
                            self.mf6.get("STAGE", self.mf6.model, pkg.upper()).astype(float))
         pkg, cmap, rbot, stage0 = self.rivers
-        if rv.get("stage") == "nextgen_depth":
-            from .coupling.nextgen import DEPTH
-            depth = dict(zip(self.sw.names(DEPTH), self.sw.get(DEPTH)))
+        if rv.get("stage") in ("surface_depth", "nextgen_depth"):
+            depth = dict(zip(self.sw.names(S.DEPTH), self.sw.get(S.DEPTH)))  # yesterday's (SWAT+) or today's (replay)
             e = cmap.entry_channel
             stage = stage0.copy()
             for i, c in enumerate(cmap.channels):
@@ -331,13 +335,20 @@ class Basin:
         for chain in self.utilities.values():
             for route, vol in chain.close_day(L).items():
                 rt.request(route, vol)
-        for route, vol in exchange_requests(self.due).items():
-            rt.request(route, vol)
+        if not self.direct_exchange:
+            for route, vol in exchange_requests(self.due).items():
+                rt.request(route, vol)
 
         # 4. the surface model (SWAT+ live, or the next day of a NextGen run)
         rt.apply_swat()
+        if self.direct_exchange:
+            names = self.sw.names(S.GW_EXCHANGE)
+            self.sw.set(S.GW_EXCHANGE, np.array([self.due.get(c, 0.0) / DAY for c in names]))
         self.swat.update()
         rt.read_swat()
+        if self.direct_exchange:
+            got = dict(zip(self.sw.names(S.GW_EXCHANGE), self.sw.get(S.GW_EXCHANGE) * DAY))
+            self._exchanged = {c: got[c] for c in self.due}
 
         # 5. MODFLOW 6
         if self.mf6 is not None:
@@ -383,11 +394,15 @@ class Basin:
         """Today's SWAT+ side of yesterday's exchange, then today's MODFLOW 6 exchange as tomorrow's due."""
         for c in self.due:
             k = f"exchange:{c}:"
-            pt = L.today(f"route:swat:point_source:gw_{c}:delivered")
-            taken = L.today(f"route:swat:place_of_use:seep_{c}:delivered")
-            short = L.today(f"route:swat:place_of_use:seep_{c}:shortfall")
+            if self.direct_exchange:
+                applied = self._exchanged[c]                 # what SWAT+ actually exchanged
+                short = max(applied - self.due[c], 0.0) if self.due[c] < 0 else 0.0  # a loss it couldn't supply
+            else:
+                applied = (L.today(f"route:swat:point_source:gw_{c}:delivered")
+                           - L.today(f"route:swat:place_of_use:seep_{c}:delivered"))
+                short = L.today(f"route:swat:place_of_use:seep_{c}:shortfall")
             L.enter(k + "due", self.due[c])
-            L.enter(k + "applied", pt - taken)
+            L.enter(k + "applied", applied)
             L.enter(k + "shortfall", -short)
         self.due = self.exchange.after_solve()
         for c, net in self.due.items():

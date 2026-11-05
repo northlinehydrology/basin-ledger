@@ -63,15 +63,18 @@ def test_the_river_gains_and_loses(two_way):
     t = two_way["table"]
     x = t["exchange:cha01:to_stream"]
     assert (x > 0).sum() > 100 and (x < 0).sum() > 10
-    assert t["route:swat:point_source:gw_cha01:delivered"].sum() > 0
-    assert t["route:swat:place_of_use:seep_cha01:delivered"].sum() > 0
+    applied = t["exchange:cha01:applied"]
+    assert (applied > 0).sum() > 100 and (applied < 0).sum() > 0
 
 
 def test_shortfalls_are_reported_not_hidden(two_way):
+    """A losing reach SWAT+ can't supply is entered as a shortfall; SWAT+ never takes more than was due."""
     t = two_way["table"]
-    short = t["route:swat:place_of_use:seep_cha01:shortfall"]
-    assert (short >= 0).all()
-    np.testing.assert_allclose(-t["exchange:cha01:shortfall"], short, rtol=0)
+    due, applied, short = (t[f"exchange:cha01:{k}"] for k in ("due", "applied", "shortfall"))
+    assert (short <= 1e-9).all()
+    loss = due < 0
+    assert (applied[loss] >= due[loss] * (1 + 1e-6) - 1e-6).all()
+    np.testing.assert_allclose(due, applied + short, rtol=1e-6, atol=1e-6)
 
 
 def test_modflow_budget_closes_and_matches_the_ledger(two_way):
@@ -98,3 +101,26 @@ def test_pass_through_settings(tmp_path, swatplus):
     for l in lines[2:]:
         f = l.split()
         assert float(f[cols.index("flo_min")]) == -1e6 and float(f[cols.index("rchg_dp")]) == 0
+
+
+def test_stage_from_swat_depth(swatplus):
+    """With swatplus-bmi 0.2.0, river stage = RBOT + bed thickness + SWAT+'s channel depth (the pause's, yesterday's)."""
+    if not S.has_groundwater_exchange():
+        pytest.skip("needs swatplus-bmi 0.2.0 (channel depth)")
+    cfg = C.load(ROOT / "examples" / "synthetic" / "two_way.toml")
+    cfg.run_folder = RUNS
+    cfg.rivers = {"package": "riv", "map": "all:cha01", "stage": "surface_depth", "bed_thickness": 1.0}
+    b = Basin(cfg, run="two-way-stage", days=200)
+    stages, depths = [], []
+    for _ in range(200):
+        b.step()
+        stages.append(b.mf6.get("STAGE", "GWF", "RIV").copy())
+        depths.append(float(b.sw.get(S.DEPTH)[0]))  # day d's depth, which set day d's stage
+    rbot = b.mf6.get("RBOT", "GWF", "RIV")
+    t = b.ledger.table()
+    b.finalize()
+    # the stage set on day d is RBOT + 1 m + the depth SWAT+ reported for day d (4-byte reals)
+    st = np.array(stages)[:, 0]
+    np.testing.assert_allclose(st, rbot[0] + 1.0 + np.array(depths), rtol=0, atol=1e-5)
+    assert np.ptp(st) > 0
+    assert (t["exchange:cha01:due"] != 0).sum() > 100

@@ -19,6 +19,16 @@ WITHDRAWN = "place_of_use_water__volume_withdrawal_rate"  # m3 s-1, what SWAT+ t
 POINT = "point_source_water__volume_flow_rate"           # m3 s-1, set for the next day
 QOUT = "channel_water__volume_outflow_rate"
 AQU_OUT = "aquifer_water__volume_outflow_rate"
+DEPTH = "channel_water__depth"                                   # m, swatplus-bmi 0.2.0
+GW_EXCHANGE = "channel_water__groundwater_volume_exchange_rate"  # m3 s-1, positive into the channel, 0.2.0
+
+
+def has_groundwater_exchange() -> bool:
+    """Whether the installed swatplus-bmi sets a channel's groundwater exchange directly (0.2.0 and later). Earlier
+    versions route the exchange through a point source and a water allocation place of use per channel."""
+    from importlib.metadata import version
+    major, minor = (int(x) for x in version("swatplus-bmi").split(".")[:2])
+    return (major, minor) >= (0, 2)
 
 
 def add_places_of_use(project: Path, uses: list[tuple[str, str]], rate_max: float = 100.0):

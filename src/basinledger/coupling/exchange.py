@@ -2,20 +2,23 @@
 
 MODFLOW 6's river package (RIV) computes the exchange between each river cell and the aquifer from the river stage
 and the head. Each day, after the solve, the exchange is summed per SWAT+ channel through a channel map (which RIV
-entries belong to which channel). The next day:
+entries belong to which channel). The next day it goes to SWAT+:
 
-- a net discharge to the stream (a gaining reach) enters the channel as a SWAT+ point source, ``gw_<channel>``;
-- a net leakage from the stream (a losing reach) is taken from the channel as a SWAT+ water allocation demand,
-  ``seep_<channel>``. A negative point source would not do: SWAT+ 62.0.1 records a negative point source in full
-  even when the channel can't supply it.
+- **swatplus-bmi 0.2.0 and later:** as the channel's groundwater exchange
+  (``channel_water__groundwater_volume_exchange_rate``, positive into the channel). A gain joins the channel's inflow
+  before routing. A loss comes out of the day's outflow, no more than is there, and counts as SWAT+'s channel
+  seepage. Reading the variable after the day gives what was actually exchanged, which is what the ledger enters.
+- **Earlier versions:** a net discharge to the stream enters the channel as a SWAT+ point source, ``gw_<channel>``.
+  A net leakage from the stream is taken as a SWAT+ water allocation demand, ``seep_<channel>``. A negative point
+  source would not do: SWAT+ 62.0.1 records a negative point source in full even when the channel can't supply it.
 
 SWAT+'s own aquifers are set to pass recharge through (``swatplus.aquifer_pass_through``: no return flow, revap or
 deep recharge), so groundwater reaches the streams once, through MODFLOW 6. The ledger holds SWAT+'s aquifer outflow
 at zero every day.
 
 Limits of this first version:
-- MODFLOW 6's river stage is fixed in its input; SWAT+'s channel depth isn't exposed through BMI yet (a request to
-  swatplus-bmi);
+- MODFLOW 6's river stage is fixed in its input unless the example's ``[rivers]`` section sets it from the surface
+  model's channel depth (``stage = "surface_depth"``; SWAT+'s depth needs swatplus-bmi 0.2.0);
 - the lag moves water by a day but keeps its volume; the last day's exchange is reported as in transit;
 - a losing reach SWAT+ can't supply is entered as a shortfall: water MODFLOW 6 took from a stream that, in SWAT+,
   wasn't there. The next step is to lower the reach's stage for the next day when that happens.
