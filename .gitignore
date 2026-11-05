@@ -5,3 +5,4 @@ runs/
 tests/runs/
 __marimo__/
 .pytest_cache/
+dist/

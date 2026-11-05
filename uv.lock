@@ -49,6 +49,7 @@ nextgen = [
     { name = "netcdf4" },
 ]
 users = [
+    { name = "pyyaml" },
     { name = "waterledger-models" },
 ]
 
@@ -71,8 +72,9 @@ requires-dist = [
     { name = "modflowapi", specifier = ">=0.2" },
     { name = "netcdf4", marker = "extra == 'nextgen'", specifier = ">=1.6,<1.7.5" },
     { name = "numpy", specifier = ">=1.26" },
+    { name = "pyyaml", marker = "extra == 'users'", specifier = ">=6" },
     { name = "swatplus-bmi", specifier = ">=0.1.1" },
-    { name = "waterledger-models", marker = "extra == 'users'", specifier = ">=3" },
+    { name = "waterledger-models", marker = "extra == 'users'", specifier = ">=3.9" },
 ]
 provides-extras = ["users", "nextgen"]
 
