@@ -45,7 +45,8 @@ from .users import WaterUser, load_component
 
 def _example_function(cfg: C.ExampleConfig, spec: str, default: str):
     mod, _, fn = spec.partition(":")
-    spec_ = importlib.util.spec_from_file_location(f"basinledger_example_{cfg.name}_{mod}", cfg.folder / f"{mod}.py")
+    name = f"basinledger_example_{cfg.name}_{mod}".replace("/", "_").replace("-", "_")
+    spec_ = importlib.util.spec_from_file_location(name, cfg.folder / f"{mod}.py")
     m = importlib.util.module_from_spec(spec_)
     spec_.loader.exec_module(m)
     return getattr(m, fn or default)
