@@ -1,0 +1,135 @@
+{
+  "question": "uv run --group gis --group examples python examples/plaster-creek/demo.py",
+  "dry_year": 2021,
+  "normal_year": 2020,
+  "observed_7day_low_m3s": {
+    "2019": 0.32188164056599994,
+    "2020": 0.23142954199799998,
+    "2021": 0.19583122055799998
+  },
+  "threshold_q90_m3s": 0.3278295159339905,
+  "by_year": {
+    "2019": {
+      "type": "wettest",
+      "baseline_7day_low_m3s": 0.169047121490751,
+      "wells_7day_low_m3s": 0.1375565817724174,
+      "change_7day_low_m3s": -0.0314905397183336,
+      "change_7day_low_pct": -18.628261422396672,
+      "days_below_q90_baseline": 30,
+      "days_below_q90_wells": 32,
+      "depletion_jul_oct_m3s": 0.037393012558090785,
+      "pumping_jul_oct_m3s": 0.0906067641122536
+    },
+    "2020": {
+      "type": "median",
+      "baseline_7day_low_m3s": 0.21337400802544185,
+      "wells_7day_low_m3s": 0.17162971015646392,
+      "change_7day_low_m3s": -0.04174429786897793,
+      "change_7day_low_pct": -19.56390951985141,
+      "days_below_q90_baseline": 49,
+      "days_below_q90_wells": 73,
+      "depletion_jul_oct_m3s": 0.04433989411604681,
+      "pumping_jul_oct_m3s": 0.09046000258691962
+    },
+    "2021": {
+      "type": "driest",
+      "baseline_7day_low_m3s": 0.16119821582521712,
+      "wells_7day_low_m3s": 0.11793571183696304,
+      "change_7day_low_m3s": -0.043262503988254083,
+      "change_7day_low_pct": -26.838078676480173,
+      "days_below_q90_baseline": 48,
+      "days_below_q90_wells": 62,
+      "depletion_jul_oct_m3s": 0.054427547107523434,
+      "pumping_jul_oct_m3s": 0.09165457472949626
+    }
+  },
+  "glover": {
+    "nextgen_michigan_parameters": {
+      "distance_m": 500.0,
+      "transmissivity_m2_d": 500.0,
+      "storativity": 0.1
+    },
+    "modflow6_parameters": {
+      "distance_m": 500.0,
+      "transmissivity_m2_d": 175.37514665289578,
+      "storativity": 0.15
+    },
+    "share_of_pumping_last_year": {
+      "modflow6": 0.6332552191503932,
+      "glover_nextgen_michigan": 0.8939207477985345,
+      "glover_modflow6_parameters": 0.7815681402692964
+    },
+    "dry_year_jul_oct_m3s": {
+      "pumping": 0.09165457472949626,
+      "modflow6": 0.054427547107523434,
+      "glover_nextgen_michigan": 0.07913928901582337,
+      "glover_modflow6_parameters": 0.06579986517937213
+    }
+  },
+  "sensitivity": {
+    "K x0.5": {
+      "change_7day_low_driest_m3s": -0.03750566134714908,
+      "depletion_share_last_year": 0.6064391058046223,
+      "days_below_q90_driest": 61
+    },
+    "K x2": {
+      "change_7day_low_driest_m3s": -0.041338313218953066,
+      "depletion_share_last_year": 0.5824995190140221,
+      "days_below_q90_driest": 61
+    },
+    "streambed x0.1": {
+      "change_7day_low_driest_m3s": -0.023860561552027537,
+      "depletion_share_last_year": 0.5056695904122213,
+      "days_below_q90_driest": 57
+    },
+    "streambed x10": {
+      "change_7day_low_driest_m3s": -0.0523292594432446,
+      "depletion_share_last_year": 0.7046784037852276,
+      "days_below_q90_driest": 65
+    },
+    "as built": {
+      "change_7day_low_driest_m3s": -0.04326250402332697,
+      "depletion_share_last_year": 0.6332552179692652,
+      "days_below_q90_driest": 62
+    }
+  },
+  "utility_case": {
+    "campus_withdrawal_mgd": {
+      "mean": 1.9454975085521453,
+      "peak_day": 2.4320325497884028
+    },
+    "campus_consumption_mgd_mean": 1.537836820515972,
+    "campus_return_to_sewer_mgd": {
+      "mean": 0.4093470565712893,
+      "peak_day": 0.5360062756092789
+    },
+    "bgua_average_mgd": 3.7464,
+    "bgua_max_day_mgd": 7.4928,
+    "bgua_max_day_plus_campus_peak_mgd": 9.924832549788402,
+    "bgua_contract_mgd": 10.0,
+    "wyoming_headroom_over_average_mgd": [
+      50,
+      80
+    ],
+    "campus_peak_share_of_wyoming_headroom": [
+      0.04864065099576806,
+      0.030400406872355033
+    ],
+    "cwp_headroom_mgd": 9,
+    "great_lakes_consumptive_use_mgd_mean": 1.537836820515972,
+    "sources": {
+      "bgua_population": "EPA SDWIS",
+      "gpcd": "[A] typical Michigan residential and commercial use",
+      "max_day_factor": "[A] suburban systems with lawn irrigation",
+      "bgua_contract_mgd": "[A] the BGUA-Wyoming contract maximum isn't public",
+      "wyoming_capacity_mgd": "City of Wyoming page (90); Prein & Newhof (120): a range [A]",
+      "wyoming_average_mgd": "Prein & Newhof",
+      "cwp_capacity_mgd": "City of Wyoming Clean Water Plant page; NPDES MI0024392",
+      "cwp_current_mgd": "[A] ECHO monitoring reports not yet loaded"
+    }
+  },
+  "calibration": {
+    "streamflow": "calibrated at USGS 04119055 (NextGen; calibration/record.toml)",
+    "groundwater": "screening: not fitted; see groundwater/README.md and results.json"
+  }
+}
