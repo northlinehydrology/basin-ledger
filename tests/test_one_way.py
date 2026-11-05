@@ -20,24 +20,13 @@ DAYS = 3 * 365 + 1
 
 
 def osu_printing_aquifers(refdata, dest):
-    """Osu_1hru for 2010-2012 only, with the aquifer's daily output on from the first day (no other change).
-    SWAT+ reads print.prt's rows by position unless object labels are on, so labels are turned on."""
+    """Osu_1hru with the aquifer's daily output on from the first day (it changes no results)."""
+    from swatplus_bmi.project import set_print
+
     if dest.exists():
         shutil.rmtree(dest)
     shutil.copytree(refdata / "Osu_1hru", dest)
-    prt = dest / "print.prt"
-    lines = prt.read_text().splitlines()
-    lines[2] = "0" + lines[2][1:]  # nyskip: print from the first year
-    f = lines[6].split()
-    lines[6] = f"{f[0]:<14}{'y':<14}{f[2]:<14}"  # use_obj_labels: SWAT+ reads the rows by name, not position
-    for i, line in enumerate(lines):
-        if line.split()[:1] == ["aquifer"]:
-            lines[i] = f"{'aquifer':<24}" + "".join(f"{x:>14}" for x in "yny") + f"{'y':>14}"
-    prt.write_text("\n".join(lines) + "\n")
-    sim = dest / "time.sim"
-    lines = sim.read_text().splitlines()
-    lines[2] = f"{0:>8}{2010:>11}{0:>10}{2012:>10}{lines[2].split()[4]:>10}"
-    sim.write_text("\n".join(lines) + "\n")
+    set_print(dest, ["aquifer"], intervals=["daily"], skip_years=0)
     return dest
 
 

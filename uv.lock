@@ -63,7 +63,7 @@ requires-dist = [
     { name = "flopy", specifier = ">=3.9" },
     { name = "modflowapi", specifier = ">=0.2" },
     { name = "numpy", specifier = ">=1.26" },
-    { name = "swatplus-bmi", specifier = ">=0.1" },
+    { name = "swatplus-bmi", specifier = ">=0.1.1" },
     { name = "waterledger-models", marker = "extra == 'users'", specifier = ">=3" },
 ]
 provides-extras = ["users"]
@@ -1863,7 +1863,7 @@ wheels = [
 
 [[package]]
 name = "swatplus-bmi"
-version = "0.1.0"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bmipy" },
@@ -1871,9 +1871,9 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/56/32/111dd3a60ea7d577ebdfe27c61fe0aa4b8a48414619ec86d4fefe605c274/swatplus_bmi-0.1.0.tar.gz", hash = "sha256:564169343cc0fd9a42ba15c01fb0bcb4ca85b93221d0878838a7b0023afaeb77", size = 583244, upload-time = "2026-11-04T20:33:27.217Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a0/11/790018fc3b1d4b680012b8edf476ff416d91f650028ec0d159541741869e/swatplus_bmi-0.1.1.tar.gz", hash = "sha256:718aaf88ecec41961c594becc35b444f3aeb93e060ecf73e1c6971a0a4f8ba6a", size = 585988, upload-time = "2026-11-04T23:54:08.845Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/71/2aec81d559a2c3f4409a7096d9b04ef31ba38474ef1540a43cb5aa481f92/swatplus_bmi-0.1.0-py3-none-any.whl", hash = "sha256:53cf44971165797f8476738cbad2f16a7dba75ec11e111f57272b1b5a9bbd280", size = 56599, upload-time = "2026-11-04T20:33:25.544Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/8d/8f1ec540f44892bf46e52d368a464754a3322a524778862d3b3bf6f770d2/swatplus_bmi-0.1.1-py3-none-any.whl", hash = "sha256:53df86d8a25e04fbaf1b52b3380d4a35c9bc37dfcfd0db1d73a720a3f72bbc69", size = 58460, upload-time = "2026-11-04T23:54:07.283Z" },
 ]
 
 [[package]]
