@@ -120,7 +120,9 @@ An example names one surface model: `[swatplus]` or `[nextgen]`.
     comes from and goes outside the basin. Users that take from or return to a stream must be inside the NextGen run,
     as nextgen-michigan's WaterUsers component is.
   - There are no surface routes and no two-way exchange.
-  - There is no MODFLOW 6 coupling until the run outputs CFE's percolation to groundwater.
+  - MODFLOW 6 needs the run to output CFE's percolation (`SOIL_TO_GW_FLUX`). The Plaster Creek example reruns
+    NextGen with it. MODFLOW 6 then runs one-way under the replay: recharge in, and river stages from t-route's
+    depth. Its base flow is reported beside NextGen's flows and doesn't change them.
 
   The driver refuses each of these with a message.
 - **Why both.** NextGen is the calibrated streamflow model where one exists, on the frame the National Water Model
@@ -534,11 +536,20 @@ libmf6 lives in the driver's process. A branch would need MODFLOW 6 restarted fr
     published fit and Basin Ledger's recomputation of it. A test checks the two agree with the record. Low flow is
     approximate (7-day lows 8–18% below observed in 2020–2022), and the calibration is for the gage, not the ungaged
     headwaters.
+  - **Groundwater (built, screening):** a MODFLOW 6 model under the calibrated surface, from public data
+    (`examples/plaster-creek/groundwater`).
+    - 250 m cells, 3 layers after SIR 2010-5109's scheme, K by mapped glacial unit and bedrock subcrop.
+    - Recharge is CFE's daily percolation from a NextGen rerun.
+    - River stages follow t-route's depth (`[rivers]`), and base flow is reported per flowpath.
+    - The fit: heads have an RMSE of 7.9 m against Wellogic; mean base flow is within 4% of the gage's separation, but
+      too steady.
+  - **The demo** (`docs/plaster-creek-demo.md`): the campus on its own well against utility water, by year type;
+    Glover against MODFLOW 6; one-at-a-time ranges; the utility's capacity.
   - **Next:**
-    - replaying nextgen-michigan's scenario runs (users on wells and on the creek, inside NextGen) against the
-      baseline;
-    - SWAT+ on the same catchments for water quality;
-    - MODFLOW 6 cut from a regional model.
+    - fit the groundwater with PEST++ IES;
+    - extend the forcing to include 2012;
+    - replay nextgen-michigan's scenario runs;
+    - SWAT+ on the same catchments for water quality.
   - **The groundwater model's starting point:** USGS's regional Lake Michigan Basin model (Feinstein et al., 2010) is
     SEAWAT-2000/MODFLOW-2000, 20 layers with about 1.5 km inner cells. The MODFLOW-NWT inset models derived from it
     are archived (doi:10.5066/F76D5R5V). Either can be converted to MODFLOW 6 with flopy and refined around the basin.
@@ -581,8 +592,11 @@ Next:
 5. Applying calibration parameters (SWAT+ `calibration.cal`, MODFLOW 6 arrays with pyEMU), PEST++ IES files, USGS
    observations.
 6. AORC forcing for SWAT+ and the users; the SWAT+ project builder on the hydrofabric, with outputs at every nexus.
-7. Plaster Creek: replay nextgen-michigan's scenario runs; rerun NextGen with CFE's percolation in its outputs for
-   MODFLOW 6; then SWAT+ on the same catchments for water quality.
+7. Plaster Creek:
+   - fit the screening groundwater model (specific yield, glacial K, streambed conductance) to base flow and heads;
+   - extend NextGen's forcing to include the 2012 drought;
+   - add existing pumping once it can be placed;
+   - SWAT+ on the same catchments for water quality.
 
 ## References
 
