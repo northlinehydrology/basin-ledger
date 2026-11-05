@@ -38,7 +38,17 @@ what, why, and how Basin Ledger copes until then. Written Nov 4, 2026.
    two-way exchange takes water from losing reaches. Today each such reach needs a water allocation place of use set
    up in the SWAT+ project.
 
-A note for the swatplus-bmi docs: in print.prt, SWAT+ reads object rows by position unless `use_obj_labels` (the
+5. **To check in SWAT+ 62.0.1's water allocation:** `wallo_withdraw.f90` reads a place of use's duty as
+   `pou(ipou)%pod(ipod)%duty`, with `ipod` the point of diversion's global number, though `pou(ipou)%pod` is the
+   place of use's own list. With one point of diversion per place of use, as Basin Ledger writes them, the two agree
+   for the first channel. A place of use on a second channel may read the wrong entry. Basin Ledger's tests use one
+   channel. A test on a two-channel project would settle it.
+
+A note for the swatplus-bmi docs: SWAT+ keeps one point of diversion per channel (`sd_ch%wallo_pod`), so several
+places of use on one channel must share one `point_of_diver.wro` row listing them all. Separate rows for the same
+channel leave all of them withdrawing nothing, with no error.
+
+A second note for the swatplus-bmi docs: in print.prt, SWAT+ reads object rows by position unless `use_obj_labels` (the
 second value under `csvout dbout cdfout`) is `y`. Osu_1hru's rows aren't in the order SWAT+ reads them, so turning on
 one object's daily output by editing its row does nothing unless labels are on. swatplus-bmi's tests turn everything
 on, which hides this. (An earlier version of this file reported daily outputs missing after an early stop. That was
