@@ -20,7 +20,7 @@ from fetch import data_dir
 
 HERE = Path(__file__).parent
 LABELS = 5  # how many of the top-scoring basins get a name
-ALSO = {"USGS-04118500"}  # the Rogue, named in the README's shortlist
+ALSO = {"USGS-04118500"}  # the Rogue, also labeled
 
 
 def _patches(geom):
