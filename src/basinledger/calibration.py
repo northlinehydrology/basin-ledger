@@ -37,20 +37,46 @@ STATUSES = ("calibrated", "screening")
 SCREENING = "screening"
 
 
-def record_status(record: Path | None) -> str:
-    """The status an example's calibration record gives it; no record means a screening run."""
+def model_statuses(record: Path | None, models: list[str]) -> dict[str, str]:
+    """Each model's status from an example's record.
+
+    A record gives either one status for the example (top-level ``status``, ``[calibration]``, ``[validation]``)
+    or one per model (``[models.<name>]`` with the same keys), e.g. streamflow from NextGen calibrated and MODFLOW 6
+    a screening model. A model the record doesn't name is screening. A calibrated model needs its calibration and
+    validation statistics.
+    """
     if record is None:
-        return SCREENING
+        return {m: SCREENING for m in models}
     with open(record, "rb") as f:
         rec = tomllib.load(f)
-    status = rec.get("status")
-    if status not in STATUSES:
-        raise ValueError(f"{record}: status must be one of {STATUSES}, not {status!r}")
-    if status == "calibrated":
-        missing = [k for k in ("calibration", "validation") if k not in rec]
-        if missing:
-            raise ValueError(f"{record}: a calibrated record needs its {' and '.join(missing)} statistics")
-    return status
+    per = rec.get("models")
+    out = {}
+    for m in models:
+        entry = per.get(m) if per is not None else rec
+        status = (entry or {}).get("status", SCREENING)
+        if status not in STATUSES:
+            raise ValueError(f"{record}: status must be one of {STATUSES}, not {status!r}")
+        if status == "calibrated":
+            missing = [k for k in ("calibration", "validation") if k not in entry]
+            if missing:
+                raise ValueError(f"{record}: a calibrated record needs its {' and '.join(missing)} statistics")
+        out[m] = status
+    return out
+
+
+def record_targets(record: Path | None) -> dict[str, str]:
+    """What each model in a record was calibrated to (its ``target``), e.g. streamflow at a gage."""
+    if record is None:
+        return {}
+    with open(record, "rb") as f:
+        rec = tomllib.load(f)
+    return {m: e["target"] for m, e in (rec.get("models") or {}).items() if "target" in e}
+
+
+def record_status(record: Path | None, models: list[str] | None = None) -> str:
+    """'calibrated' only if every model the example runs is calibrated; otherwise a screening run."""
+    st = model_statuses(record, models or ["all"])
+    return "calibrated" if all(v == "calibrated" for v in st.values()) else SCREENING
 
 
 @dataclass

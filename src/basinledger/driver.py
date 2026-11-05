@@ -64,60 +64,77 @@ class Basin:
         self.folder.mkdir(parents=True)
         saved = json.loads((Path(restart) / "basin.json").read_text()) if restart else None
 
-        # SWAT+, from a copy of the project with the objects the run needs
+        # the surface model: SWAT+ from a copy of the project with the objects the run needs, or a NextGen run
         ex = cfg.exchange
-        swat_dir = self.folder / "swatplus"
-        shutil.copytree(cfg.swat_project, swat_dir)
-        channels = S._channels(swat_dir)
-        ex_channels = self._exchange_channels(ex) if ex else []
-        places = list(cfg.places_of_use) + [(f"seep_{c}", c) for c in ex_channels]
-        points = list(cfg.point_sources) + [(f"gw_{c}", c) for c in ex_channels]
-        if places:
-            S.add_places_of_use(swat_dir, places)
-        if points:
-            S.add_point_sources(swat_dir, points)
-        if ex:
-            S.aquifer_pass_through(swat_dir)
-        if prepare:
-            prepare("swatplus", swat_dir)
-        self.swat = SwatPlusBmi()
-        self.swat.initialize(str(swat_dir))
+        swat_dir = None
+        if cfg.surface == "swatplus":
+            swat_dir = self.folder / "swatplus"
+            shutil.copytree(cfg.swat_project, swat_dir)
+            channels = S._channels(swat_dir)
+            ex_channels = self._exchange_channels(ex) if ex else []
+            places = list(cfg.places_of_use) + [(f"seep_{c}", c) for c in ex_channels]
+            points = list(cfg.point_sources) + [(f"gw_{c}", c) for c in ex_channels]
+            if places:
+                S.add_places_of_use(swat_dir, places)
+            if points:
+                S.add_point_sources(swat_dir, points)
+            if ex:
+                S.aquifer_pass_through(swat_dir)
+            if prepare:
+                prepare("swatplus", swat_dir)
+            self.swat = SwatPlusBmi()
+            self.swat.initialize(str(swat_dir))
+        else:
+            from .coupling.nextgen import NgenReplay
+            if ex or cfg.places_of_use or cfg.point_sources:
+                raise ValueError("a replayed NextGen run takes no surface routes or two-way exchange")
+            self.swat = NgenReplay()
+            self.swat.initialize(str(cfg.nextgen_run))
+            channels = list(self.swat.ids)
+            ex_channels = []
         self.sw = S.Swat(self.swat)
         units = self.swat.get_time_units()  # days since YYYY-MM-DD hh:mm:ss
         self.start = dt.date.fromisoformat(units.split(" since ")[1].split()[0])
         self.days = days or cfg.days or int(self.swat.get_end_time() - self.swat.get_start_time())
         self.day = 0
         if saved:
-            self.swat.load_state(str(Path(restart) / "swatplus"))
+            self.swat.load_state(str(Path(restart) / "surface"))
             self.day = saved["day"]
 
-        # MODFLOW 6: built (or copied) for the run, or for the days left after a restart
-        ws = self.folder / "mf6"
-        if cfg.mf6_builder:
-            _example_function(cfg, cfg.mf6_builder, "build")(ws, self.days - self.day,
-                                                             self.start + dt.timedelta(days=self.day))
-        elif saved:
-            remaining_simulation(cfg.mf6_workspace, ws, self.day)
-        else:
-            shutil.copytree(cfg.mf6_workspace, ws)
-        if prepare:
-            prepare("modflow6", ws)
-        self.mf6 = Modflow6(ws, cfg.mf6_model)
-        if saved:
-            self.mf6.set_heads(np.load(Path(restart) / "heads.npy"))
-        if self.mf6.end < self.days - self.day - 1e-9:
-            raise ValueError(f"MODFLOW 6 simulation is {self.mf6.end} days; the run needs {self.days - self.day}")
-
-        # recharge: SWAT+ aquifers -> MODFLOW 6 cells
-        aquifers = self.sw.names("soil_water_table__recharge_rate")
-        self.map = self._area_map(cfg.recharge_map, aquifers)
-        areas = S.aquifer_areas(swat_dir)
-        self.map.check(self.mf6.cell_area, np.array([areas[a] for a in aquifers]), cfg.area_rtol)
-        self.recharge = RechargeLink(self.swat, self.mf6, self.map, cfg.recharge_package)
+        # MODFLOW 6 (optional): built (or copied) for the run, or for the days left after a restart
+        self.mf6 = None
+        if cfg.has_modflow6:
+            if cfg.surface != "swatplus":
+                raise NotImplementedError("MODFLOW 6 with NextGen needs CFE's percolation in the run's outputs "
+                                          "(not yet); see coupling/nextgen.py")
+            ws = self.folder / "mf6"
+            if cfg.mf6_builder:
+                _example_function(cfg, cfg.mf6_builder, "build")(ws, self.days - self.day,
+                                                                 self.start + dt.timedelta(days=self.day))
+            elif saved:
+                remaining_simulation(cfg.mf6_workspace, ws, self.day)
+            else:
+                shutil.copytree(cfg.mf6_workspace, ws)
+            if prepare:
+                prepare("modflow6", ws)
+            self.mf6 = Modflow6(ws, cfg.mf6_model)
+            if saved:
+                self.mf6.set_heads(np.load(Path(restart) / "heads.npy"))
+            if self.mf6.end < self.days - self.day - 1e-9:
+                raise ValueError(f"MODFLOW 6 simulation is {self.mf6.end} days; the run needs {self.days - self.day}")
+        elif cfg.wells or ex or cfg.outputs.get("heads"):
+            raise ValueError("wells, the two-way exchange and head outputs need a [modflow6] model")
 
         self.ledger = Ledger()
         L = self.ledger
-        L.pair("recharge:sent", "recharge:received")
+        # recharge: SWAT+ aquifers -> MODFLOW 6 cells
+        if self.mf6 is not None:
+            aquifers = self.sw.names("soil_water_table__recharge_rate")
+            self.map = self._area_map(cfg.recharge_map, aquifers)
+            areas = S.aquifer_areas(swat_dir)
+            self.map.check(self.mf6.cell_area, np.array([areas[a] for a in aquifers]), cfg.area_rtol)
+            self.recharge = RechargeLink(self.swat, self.mf6, self.map, cfg.recharge_package)
+            L.pair("recharge:sent", "recharge:received")
         wells = {w.name: (w.package, self.mf6.node(*w.cell)) for w in cfg.wells}
         self.router = Router(self.sw, self.mf6, wells, L)
 
@@ -146,7 +163,8 @@ class Basin:
             for u in cfg.users:
                 comp = load_component(u.component)
                 wu = WaterUser(u.name, comp, str(u.config) if u.config else None,
-                               variables=u.variables or None, constituents=u.constituents)
+                               variables=u.variables or None, constituents=u.constituents,
+                               inputs=self._forcing(u, comp))
                 self.users.append((u, wu))
                 for route in (u.withdrawal, u.returns):
                     k, name = kind(route)
@@ -176,6 +194,12 @@ class Basin:
         self._ch_index = {c: channels.index(c) for c in self.out_channels}
         self.out_heads = [(h["name"], self.mf6.node(*h["cell"])) for h in out.get("heads", [])]
         self.series: dict[str, list[float]] = {f"flow:{c}": [] for c in self.out_channels}
+        # NextGen: flow at each nexus, from the flowpaths draining to it (the hydrofabric's topology)
+        self._nexus: dict[str, list[int]] = {}
+        for c, nx in getattr(self.swat, "nexus", {}).items():
+            if c in self._ch_index and nx:
+                self._nexus.setdefault(nx, []).append(self._ch_index[c])
+        self.series.update({f"flow:{nx}": [] for nx in self._nexus})
         self.series.update({f"head:{n}": [] for n, _ in self.out_heads})
 
         if saved:
@@ -194,6 +218,19 @@ class Basin:
         with open(self.cfg.folder / spec, newline="") as f:
             return list(dict.fromkeys(r["object"] for r in csv.DictReader(f)))
 
+    def _forcing(self, u: C.UserConfig, comp) -> dict:
+        """Hourly weather inputs for a user, from its forcing source, for the inputs its component takes."""
+        if not u.forcing:
+            return {}
+        if u.forcing.get("source") != "nextgen" or self.cfg.surface != "nextgen":
+            raise NotImplementedError(f"user {u.name}: forcing from {u.forcing.get('source')!r} (only NextGen's own "
+                                      "forcing so far; AORC is planned)")
+        from .forcing import nextgen_inputs
+        start = dt.datetime.combine(self.start, dt.time())
+        series = nextgen_inputs(self.cfg.nextgen_run, u.forcing["catchment"], start)
+        takes = set(comp.get_input_var_names())
+        return {k: v for k, v in series.items() if k in takes}
+
     def _area_map(self, spec: str, aquifers: list[str]) -> AreaMap:
         if spec.startswith("all:"):
             nodes = self.mf6.package_nodes(self.cfg.recharge_package)
@@ -203,9 +240,15 @@ class Basin:
     # ---------- one day ----------
     def _state(self) -> R.State:
         q = self.sw.get(S.QOUT)
-        heads = self.mf6.head()
-        return R.State(day=self.day, flows=dict(zip(self.sw.names(S.QOUT), q)),
-                       head_at=lambda c: float(heads[self.mf6.node(*c)]), memory=self.rule_memory)
+        heads = self.mf6.head() if self.mf6 is not None else None
+
+        def head_at(c):
+            if heads is None:
+                raise ValueError("a drawdown rule needs a [modflow6] model")
+            return float(heads[self.mf6.node(*c)])
+
+        return R.State(day=self.day, flows=dict(zip(self.sw.names(S.QOUT), q)), head_at=head_at,
+                       memory=self.rule_memory)
 
     def step(self):
         d = self.day
@@ -249,12 +292,30 @@ class Basin:
         for route, vol in exchange_requests(self.due).items():
             rt.request(route, vol)
 
-        # 4. SWAT+
+        # 4. the surface model (SWAT+ live, or the next day of a NextGen run)
         rt.apply_swat()
         self.swat.update()
         rt.read_swat()
 
         # 5. MODFLOW 6
+        if self.mf6 is not None:
+            self._modflow_day(L, rt)
+        rt.close_day()
+
+        # 6. outputs and checks
+        q = self.sw.get(S.QOUT)
+        for c, i in self._ch_index.items():
+            self.series[f"flow:{c}"].append(float(q[i]))
+        for nx, idx in self._nexus.items():
+            self.series[f"flow:{nx}"].append(float(q[idx].sum()))
+        if self.out_heads:
+            h = self.mf6.head()
+            for n, node in self.out_heads:
+                self.series[f"head:{n}"].append(float(h[node]))
+        L.close_day()
+        self.day += 1
+
+    def _modflow_day(self, L, rt):
         self.mf6.prepare_day()
         if self.cfg.exchange and self.exchange is None:
             ex = self.cfg.exchange
@@ -271,18 +332,6 @@ class Basin:
         if self.cfg.exchange:
             self._enter_exchange(L)
             L.enter("swatplus:aquifer_outflow", float(self.sw.get(S.AQU_OUT).sum()) * DAY)
-        rt.close_day()
-
-        # 6. outputs and checks
-        q = self.sw.get(S.QOUT)
-        for c, i in self._ch_index.items():
-            self.series[f"flow:{c}"].append(float(q[i]))
-        if self.out_heads:
-            h = self.mf6.head()
-            for n, node in self.out_heads:
-                self.series[f"head:{n}"].append(float(h[node]))
-        L.close_day()
-        self.day += 1
 
     def _enter_exchange(self, L):
         """Today's SWAT+ side of yesterday's exchange, then today's MODFLOW 6 exchange as tomorrow's due."""
@@ -311,8 +360,9 @@ class Basin:
         if folder.exists():
             shutil.rmtree(folder)
         folder.mkdir(parents=True)
-        self.swat.save_state(str(folder / "swatplus"))
-        np.save(folder / "heads.npy", self.mf6.head())
+        self.swat.save_state(str(folder / "surface"))
+        if self.mf6 is not None:
+            np.save(folder / "heads.npy", self.mf6.head())
         (folder / "basin.json").write_text(json.dumps({
             "day": self.day, "ledger": self.ledger.state(), "series": self.series,
             "rule_memory": self.rule_memory,
@@ -335,11 +385,19 @@ class Basin:
             f.write(",".join(["day", "date", *cols]) + "\n")
             for i in range(len(dates)):
                 f.write(",".join([str(i), dates[i], *(repr(self.series[c][i]) for c in cols)]) + "\n")
+        from .calibration import model_statuses, record_targets
+        targets = record_targets(self.cfg.calibration_record)
+        if self.status == "calibrated":
+            note = ("calibrated: " + "; ".join(f"{m} to {t}" for m, t in targets.items()) +
+                    ". Water users' settings are assumptions or applicant data, not calibrated.") if targets else None
+        else:
+            note = ("screening run: not every model is calibrated; results show how the engine and scenarios work, "
+                    "not what would happen in this basin")
         summary = {
             "example": self.cfg.name, "status": self.status,
-            "status_note": None if self.status == "calibrated" else
-            "screening run: the models are not calibrated; results show how the engine and scenarios work, "
-            "not what would happen in this basin",
+            "models": model_statuses(self.cfg.calibration_record, self.cfg.models),
+            "calibrated_to": targets,
+            "status_note": note,
             "start": self.start.isoformat(), "days": self.ledger.days,
             "totals": {k: v for k, v in self.ledger.totals().items() if not math.isnan(v)},
             "in_transit": self.due,
@@ -350,7 +408,8 @@ class Basin:
     def finalize(self):
         for _, wu in self.users:
             wu.finalize()
-        self.mf6.finalize()
+        if self.mf6 is not None:
+            self.mf6.finalize()
         self.swat.finalize()
 
     @classmethod

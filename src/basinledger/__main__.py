@@ -57,7 +57,7 @@ def main(argv=None) -> int:
     summary = json.loads((out / "summary.json").read_text())
     print(f"{summary['example']} ({summary['status']}): {summary['days']} days, ledger closed every day")
     print(f"outputs: {out}")
-    if summary["status"] != "calibrated":
+    if summary["status_note"]:
         print("note: " + summary["status_note"])
     return 0
 

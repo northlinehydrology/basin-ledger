@@ -6,6 +6,7 @@ A route is a string naming a source or sink:
     swat:place_of_use:<name>      a SWAT+ water allocation place of use, taking from its channel (withdrawal)
     swat:point_source:<name>      a SWAT+ daily point source into its channel (discharge)
     outfall:<name>                recorded in the ledger only (discharge)
+    offsite:<name>                water from or to outside the basin, recorded in the ledger only (either way)
 
 (``utility:<name>`` routes go to the utility chain, which then requests these.)
 
@@ -24,7 +25,7 @@ from .coupling import swatplus as S
 from .ledger import FLOAT32
 from .units import DAY
 
-KINDS = ("well", "swat:place_of_use", "swat:point_source", "outfall")
+KINDS = ("well", "swat:place_of_use", "swat:point_source", "outfall", "offsite")
 
 
 def kind(route: str) -> tuple[str, str]:
@@ -97,6 +98,9 @@ class Router:
                     L.enter(f"route:{r}:delivered", got[i])
 
     def apply_wells(self):
+        if self.mf6 is None:
+            self._entries = {}
+            return
         self._entries = {name: (pkg, self.mf6.entry(pkg, node)) for name, (pkg, node) in self.wells.items()}
         for name, (pkg, i) in self._entries.items():
             self.mf6.set_well(pkg, i, -self.req.get(f"well:{name}", 0.0))
@@ -110,7 +114,7 @@ class Router:
 
     def close_day(self):
         for r in self.used:
-            if r.startswith("outfall:"):
+            if r.startswith(("outfall:", "offsite:")):
                 self.ledger.enter(f"route:{r}:requested", self.req.get(r, 0.0))
                 self.ledger.enter(f"route:{r}:delivered", self.req.get(r, 0.0))
         self.req = defaultdict(float)
