@@ -83,7 +83,7 @@ def pumping_series() -> Path:
     path = RUNS / "campus-pumping.csv"
     write_series(path, [r["date"] for r in rows], [float(r["user:campus:withdrawal"]) for r in rows],
                  [float(r["user:campus:consumption"]) for r in rows], source="modeled (CoolingWaterBmi)")
-    (RUNS / "campus-pumping.toml").write_text(f'series = "{path}"\nstart = "{rows[0]["date"]}"\n')
+    (RUNS / "campus-pumping.toml").write_text(f'series = "{path.name}"\nstart = "{rows[0]["date"]}"\n')  # relative to the toml
     return RUNS / "campus-pumping.toml"
 
 
