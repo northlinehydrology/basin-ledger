@@ -15,7 +15,7 @@ run = "{nextgen_michigan}/runs/scenarios/baseline"
 record = "calibration/record.toml"
 
 [[utilities]]
-name = "grand-rapids"
+name = "wyoming"                       # BGUA buys from the City of Wyoming (Lake Michigan water)
 # water from outside the basin, wastewater treated outside the basin: the stream sees neither
 sources = [{route = "offsite:supply", share = 1.0}]
 losses = 0.10             # [A]
@@ -25,8 +25,8 @@ outfall = "offsite:wastewater-plant"
 name = "campus"
 component = "waterledger_models.datacenter.bmi:CoolingWaterBmi"
 config = "campus.yaml"
-withdrawal = "utility:grand-rapids"
-return = "utility:grand-rapids"
+withdrawal = "utility:wyoming"
+return = "utility:wyoming"
 forcing = {source = "nextgen", catchment = "cat-652066"}
 variables = {withdrawal = "data_center_cooling_water__withdrawal_volume_flux", consumption = "data_center_cooling_water__consumption_volume_flux", return = "data_center_cooling_water__return_volume_flux", gain = "data_center_cooling_water__condensate_volume_flux", power = "data_center__electric_power"}
 constituents = {}

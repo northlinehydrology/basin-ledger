@@ -15,6 +15,7 @@ record = "calibration/record.toml"
 
 [modflow6]
 builder = "groundwater/model:build"   # from groundwater/prepare.py's arrays
+builder_args = {head_dates = ["2019-09-30", "2020-09-30", "2021-09-30", "2022-09-30"]}
 
 [recharge]
 package = "rch"
@@ -34,7 +35,7 @@ package = "wel"
 cell = [1, 70, 57]                    # layer 2, 500 m from the nearest river cell (groundwater/prepare.py)
 
 [[utilities]]
-name = "grand-rapids"
+name = "wyoming"                       # BGUA buys from the City of Wyoming (Lake Michigan water)
 sources = [{route = "offsite:supply", share = 1.0}]
 losses = 0.10                         # [A]
 outfall = "offsite:wastewater-plant"
@@ -47,8 +48,8 @@ heads = [{name = "campus-well", cell = [1, 70, 57]}]
 name = "campus"
 component = "waterledger_models.datacenter.bmi:CoolingWaterBmi"
 config = "campus.yaml"
-withdrawal = "utility:grand-rapids"
-return = "utility:grand-rapids"
+withdrawal = "utility:wyoming"
+return = "utility:wyoming"
 forcing = {source = "nextgen", catchment = "cat-652066"}
 variables = {withdrawal = "data_center_cooling_water__withdrawal_volume_flux", consumption = "data_center_cooling_water__consumption_volume_flux", return = "data_center_cooling_water__return_volume_flux", gain = "data_center_cooling_water__condensate_volume_flux", power = "data_center__electric_power"}
 constituents = {}

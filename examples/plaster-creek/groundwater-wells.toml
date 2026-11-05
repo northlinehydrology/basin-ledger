@@ -14,6 +14,7 @@ record = "calibration/record.toml"
 
 [modflow6]
 builder = "groundwater/model:build"   # from groundwater/prepare.py's arrays
+builder_args = {head_dates = ["2019-09-30", "2020-09-30", "2021-09-30", "2022-09-30"]}
 
 [recharge]
 package = "rch"
@@ -33,7 +34,7 @@ package = "wel"
 cell = [1, 70, 57]                    # layer 2, 500 m from the nearest river cell (groundwater/prepare.py)
 
 [[utilities]]
-name = "grand-rapids"
+name = "wyoming"                       # BGUA buys from the City of Wyoming (Lake Michigan water)
 sources = [{route = "offsite:supply", share = 1.0}]
 losses = 0.10                         # [A]
 outfall = "offsite:wastewater-plant"
