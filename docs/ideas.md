@@ -106,3 +106,37 @@ Andrew is lukewarm on mines, and finds bottled water interesting.
 - temperature.
 
 PFAS is context only.
+
+## 8. Utility water: where it comes from, and how to model it (decided direction, November 4, 2026)
+
+Andrew approved this direction. The facts come from public sources collected in Northline's site record for Gaines
+Township.
+
+**The facts:**
+- The Byron-Gaines Utility Authority (BGUA) buys water wholesale from the City of Wyoming through one connection. A
+  second connection is estimated at over $20 million.
+- Wyoming's plant treats Lake Michigan water. Its capacity is 120 MGD (Prein & Newhof) or 90 MGD (the city's page)
+  [A: a range]. Average use is about 40 MGD.
+- Wyoming's 2023 reliability study, as Georgetown Township summarized it, finds the system "rapidly heading toward
+  unsustainable capacity levels", with expansion projected for 2034.
+- BGUA has 3 tanks with 4 MG of storage combined, and a 2 MG tank planned.
+- Sewered wastewater goes to Wyoming's Clean Water Plant (24 MGD, NPDES MI0024392), which discharges to the Grand River.
+
+**How to model it:**
+
+1. **The utility chain, for capacity.** For a campus on utility water, the binding question is infrastructure:
+   - the plant's capacity, and its headroom on the peak day;
+   - the single connection;
+   - storage.
+
+   Basin Ledger's utility chain takes these facts as cited inputs, with the plant's capacity as a range [A]. The
+   Plaster Creek demo shows this as the utility case's result, since the creek sees almost nothing in that case.
+2. **Where the water ends up.** The campus gets lake water. What it consumes evaporates. The rest returns to the
+   Grand River below Wyoming's Clean Water Plant, with its salts and phosphorus; the plant passes salts through. That
+   is outside Plaster Creek's domain and is stated as such there. In the Lower Grand, the return is a point source on
+   the Grand.
+3. **No hydrologic model of Lake Michigan.** The withdrawal makes no measurable difference to the lake. Consumptive use
+   is reported as Great Lakes Compact accounting only.
+4. **Utility well fields are pumping users.** Many Michigan utilities pump their own wells inside the basin. A utility's
+   wells are treated as a generic user, with reported withdrawals (EGLE, SDWIS sources) at its well locations. A campus
+   on such a utility then shows up in the groundwater through the utility's added pumping on its peak days.
