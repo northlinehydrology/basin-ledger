@@ -16,6 +16,12 @@ the ledger checks against what was sent.
 
 The model must use meters and days, with one-day time steps. libmf6 holds one model per process; runs can follow one
 another in a process (finalize, then a new Modflow6), but not overlap.
+
+**Restarts.** MODFLOW 6's state, for the packages used so far, is its heads. A scenario restarts from a saved day with
+a simulation covering only the days left (``remaining_simulation``) and the saved heads put straight into memory
+(``set_heads``) after initialize and before the first step. MODFLOW 6 takes the start of a step's heads as its old
+heads, so the restarted run continues exactly. Writing the heads to the IC file would round them. Advanced packages
+with their own state (SFR stages, MAW, UZF) will need their state saved too.
 """
 
 from __future__ import annotations
@@ -129,6 +135,13 @@ class Modflow6:
         """Each entry's simulated flow for the last day, m3 d-1, positive into the aquifer."""
         return self.get("SIMVALS", self.model, package.upper())[: self.nbound(package)].astype(float)
 
+    def set_heads(self, heads: np.ndarray):
+        """Heads, m, per reduced node: call after initialize and before the first prepare_day."""
+        addr = self.api.get_var_address("X", self.model)
+        if self.api.get_value(addr).shape != np.shape(heads):
+            raise ValueError("saved heads don't match this model's nodes")
+        self.api.set_value(addr, np.asarray(heads, dtype=np.float64))
+
     def head(self) -> np.ndarray:
         """Heads, m, per reduced node."""
         return self.api.get_value(self.api.get_var_address("X", self.model)).copy()
@@ -143,3 +156,26 @@ class Modflow6:
 
     def finalize(self):
         self.api.finalize()
+
+
+def remaining_simulation(src: Path, dst: Path, day: int):
+    """A copy of a MODFLOW 6 simulation covering only the days from ``day`` on, for a restart. Supports one stress
+    period of daily steps (what the driver's builders write); models with several stress periods need their period
+    data re-keyed, which isn't built yet."""
+    import shutil
+
+    import flopy
+
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+    sim = flopy.mf6.MFSimulation.load(sim_ws=str(dst), verbosity_level=0)
+    pd = sim.tdis.perioddata.get_data()
+    if len(pd) != 1:
+        raise NotImplementedError("restarts of MODFLOW 6 models with several stress periods aren't built yet")
+    perlen, nstp, tsmult = float(pd[0][0]), int(pd[0][1]), float(pd[0][2])
+    if abs(perlen - nstp) > 1e-9 or tsmult != 1.0 or not 0 < day < nstp:
+        raise ValueError(f"restart at day {day}: needs one period of daily steps longer than that")
+    sim.tdis.perioddata = [(perlen - day, nstp - day, 1.0)]
+    sim.write_simulation(silent=True)
+    return dst
