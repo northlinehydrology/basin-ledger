@@ -101,7 +101,7 @@ def test_well_pumps_what_the_user_withdrew(pumping):
     table, ws, _ = pumping
     w = table["user:plant:withdrawal"]
     assert w.min() > 0
-    np.testing.assert_allclose(table["well:pw1:pumped"], w, rtol=1e-12)
+    np.testing.assert_allclose(table["route:well:pw1:delivered"], w, rtol=1e-12)
     np.testing.assert_allclose(-budget(ws)["WEL"], w, rtol=1e-12)
 
 
@@ -110,7 +110,7 @@ def test_user_water_goes_somewhere(pumping):
     lhs = table["user:plant:withdrawal"] + table["user:plant:gain"]
     rhs = table["user:plant:consumption"] + table["user:plant:return"]
     np.testing.assert_allclose(lhs, rhs, rtol=1e-12)
-    np.testing.assert_allclose(table["outfall:creek"], table["user:plant:return"], rtol=0)
+    np.testing.assert_allclose(table["route:outfall:creek:delivered"], table["user:plant:return"], rtol=0)
 
 
 @pytest.mark.parametrize("which", ["pumping", "base"])

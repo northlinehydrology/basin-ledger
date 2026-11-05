@@ -12,6 +12,8 @@ Paths are relative to the config file. ``{swatplus_refdata}`` stands for the exa
 
     [swatplus]
     project = "{swatplus_refdata}/Osu_1hru"
+    places_of_use = [{name = "intake", channel = "cha01"}]    # added to the run's copy, set daily
+    point_sources = [{name = "wwtp", channel = "cha01"}]
 
     [modflow6]
     builder = "model:build"             # model.py beside this file: build(workspace, days, start_date)
@@ -27,6 +29,26 @@ Paths are relative to the config file. ``{swatplus_refdata}`` stands for the exa
     name = "pw1"
     package = "wel"
     cell = [0, 20, 30]                  # layer, row, col (0-based)
+
+    [exchange]                          # optional: two-way stream-aquifer exchange (MODFLOW 6 RIV <-> SWAT+)
+    package = "riv"
+    map = "all:cha01"                   # every RIV entry to one channel, or a CSV: object, layer, row, col
+
+    [[utilities]]                       # optional: a water system (see chain.py)
+    name = "city"
+    sources = [{route = "well:pw1", share = 1.0}]
+    outfall = "swat:point_source:wwtp"
+
+    [[rules]]                           # optional: feedback rules (see rules.py)
+    name = "low-flow cut"
+    kind = "curtailment"
+    user = "plant"
+    channel = "cha01"
+    threshold = 0.001
+
+    [outputs]                           # optional: daily series written with the ledger
+    channels = ["cha01"]                # outflow, m3 s-1 (default: every channel)
+    heads = [{name = "pw1", cell = [0, 20, 28]}]
 
     [calibration]                       # optional: the example's calibration record
     record = "calibration/record.toml"  # without one, the example is a screening run
@@ -90,6 +112,12 @@ class ExampleConfig:
     wells: list[WellConfig]
     users: list[UserConfig]
     calibration_record: Path | None = None
+    places_of_use: list[tuple[str, str]] = field(default_factory=list)
+    point_sources: list[tuple[str, str]] = field(default_factory=list)
+    exchange: dict | None = None
+    utilities: list[dict] = field(default_factory=list)
+    rules: list[dict] = field(default_factory=list)
+    outputs: dict = field(default_factory=dict)
 
     @property
     def folder(self) -> Path:
@@ -113,7 +141,8 @@ def load(path: str | Path) -> ExampleConfig:
     with open(path, "rb") as f:
         c = tomllib.load(f)
     base = path.parent
-    known = {"name", "description", "run", "swatplus", "modflow6", "recharge", "wells", "users", "calibration"}
+    known = {"name", "description", "run", "swatplus", "modflow6", "recharge", "wells", "users", "calibration",
+             "exchange", "utilities", "rules", "outputs"}
     if set(c) - known:
         raise ValueError(f"{path}: unknown sections {sorted(set(c) - known)}")
     mf = c.get("modflow6", {})
@@ -141,4 +170,10 @@ def load(path: str | Path) -> ExampleConfig:
         wells=[WellConfig(w["name"], w.get("package", "wel"), tuple(w["cell"])) for w in c.get("wells", [])],
         users=users,
         calibration_record=_path(base, c["calibration"]["record"]) if c.get("calibration", {}).get("record") else None,
+        places_of_use=[(x["name"], x["channel"]) for x in c["swatplus"].get("places_of_use", [])],
+        point_sources=[(x["name"], x["channel"]) for x in c["swatplus"].get("point_sources", [])],
+        exchange=c.get("exchange"),
+        utilities=c.get("utilities", []),
+        rules=c.get("rules", []),
+        outputs=c.get("outputs", {}),
     )
