@@ -36,6 +36,7 @@ estimates one campus's water from public data. Basin Ledger follows that water t
 - feedback rules: curtailment, dry mode, drawdown limit;
 - SWAT+ recharge into MODFLOW 6 (one-way), and the two-way stream-aquifer exchange through MODFLOW 6's river package;
 - NextGen as the surface model: a finished NGIAB run replayed day by day, with users on its own hourly forcing;
+- MODFLOW 6 recharge from NextGen (CFE's percolation), used as interim recharge in the Plaster Creek example;
 - restarts from a saved day that match unbroken runs bit for bit;
 - the ledger and the command line;
 - calibration records per model, and the calibration module's structure. An example is a screening run unless every
@@ -52,7 +53,6 @@ Examples:
 Still to come ([docs/design.md](docs/design.md)):
 
 - SWAT+ built on the NextGen hydrofabric, for water quality on the same catchments;
-- MODFLOW 6 recharge from NextGen (CFE's percolation);
 - AORC forcing;
 - applying calibration parameters, and PEST++ IES.
 
