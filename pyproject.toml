@@ -17,11 +17,12 @@ dependencies = [
 [project.optional-dependencies]
 # water-user models from the open Water Ledger packages (CoolingWaterBmi first)
 users = ["waterledger-models>=3"]
-# NextGen as the surface model: reading NGIAB runs (t-route output, forcing)
-nextgen = ["netCDF4>=1.6"]
+# NextGen as the surface model: reading NGIAB runs (t-route output, forcing). Below 1.7.5, netCDF4 ships wheels for
+# macOS 13 and 14; 1.7.5 and later need macOS 15 or a local netCDF library to build from source.
+nextgen = ["netCDF4>=1.6,<1.7.5"]
 
 [dependency-groups]
-dev = ["pytest>=8", "netCDF4>=1.6", "waterledger-models>=3.9", "pyyaml>=6"]  # pyyaml: waterledger-models 3.9.0 imports it without declaring it (docs/requests.md)
+dev = ["pytest>=8", "netCDF4>=1.6,<1.7.5", "waterledger-models>=3.9", "pyyaml>=6"]  # pyyaml: waterledger-models 3.9.0 imports it without declaring it (docs/requests.md)
 examples = ["marimo>=0.9", "matplotlib>=3.8"]
 
 [build-system]
