@@ -477,6 +477,19 @@ design.
   - IES gives an ensemble, so results can carry its spread.
 - **Shared machines:** calibration runs are parallel, and are held to the cores that are free.
 
+**The order, for an example with SWAT+ and MODFLOW 6** (Andrew, November 5, 2026; Plaster Creek first):
+
+1. **SWAT+ alone,** against streamflow: land, soil and channel parameters. SWAT+'s own aquifer parameters (alpha_bf,
+   delay) are a stand-in that the coupled run replaces.
+2. **MODFLOW 6 alone,** one-way under SWAT+'s recharge, against heads and separated base flow: streambed
+   conductance, specific yield and storage, and K multipliers.
+3. **Linked both ways,** with MODFLOW 6 supplying base flow. A joint PEST++ IES pass on the parameters the feedback
+   touches, against low flows, heads and base flow together.
+
+Recharge comes from SWAT+, because SWAT+ carries water quality. Where a calibrated NextGen run exists, it is a
+comparison, a check on the National Water Model's frame, not the source of recharge. Until an example's SWAT+
+project exists, stage 2 may be prepared against NextGen's recharge, flagged as an interim forcing.
+
 **The record.** Each example keeps `calibration/` beside its config, named in `basin.toml` as
 `[calibration] record = "calibration/record.toml"`. A record gives a status per model (`[models.nextgen]`,
 `[models.modflow6]`, ...) with what it was calibrated to (`target`). An example is calibrated only if every hydrologic
@@ -592,8 +605,9 @@ Next:
 5. Applying calibration parameters (SWAT+ `calibration.cal`, MODFLOW 6 arrays with pyEMU), PEST++ IES files, USGS
    observations.
 6. AORC forcing for SWAT+ and the users; the SWAT+ project builder on the hydrofabric, with outputs at every nexus.
-7. Plaster Creek:
-   - fit the screening groundwater model (specific yield, glacial K, streambed conductance) to base flow and heads;
+7. Plaster Creek, in the calibration order above:
+   - the SWAT+ project on the hydrofabric, which blocks stage 1;
+   - stage 2 prepared on NextGen's recharge as an interim forcing;
    - extend NextGen's forcing to include the 2012 drought;
    - add existing pumping once it can be placed;
    - SWAT+ on the same catchments for water quality.

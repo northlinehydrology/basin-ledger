@@ -1,6 +1,6 @@
 # Plaster Creek groundwater and demo: progress
 
-Kept current at each commit so the work can be resumed from this file alone. Last updated: November 4, 2026, late night (demo done).
+Kept current at each commit so the work can be resumed from this file alone. Last updated: November 5, 2026 (calibration plan).
 
 ## Done (on main, pushed)
 
@@ -43,15 +43,41 @@ Kept current at each commit so the work can be resumed from this file alone. Las
 - **Write-ups:** `groundwater/README.md` (methods and fit), the screening entry in `calibration/record.toml`, the
   example README, and `docs/design.md`.
 
+## Calibration plan (Andrew, November 5, 2026)
+
+In Basin Ledger the recharge comes from SWAT+, because SWAT+ carries water quality, which is Basin Ledger's point.
+NextGen stays as a comparison only: the calibrated check against the National Water Model's frame. The models are
+calibrated separately first, then linked.
+
+1. **SWAT+ alone,** against streamflow at USGS 04119055: the land, soil and channel parameters. Its own aquifer
+   parameters (alpha_bf, delay) are a stand-in that the coupled run replaces.
+2. **MODFLOW 6 alone,** driven one-way by SWAT+ recharge, against Wellogic heads and the Eckhardt base flow:
+   streambed conductance, specific yield and storage, and the K multipliers.
+3. **Linked both ways,** with MODFLOW 6 supplying base flow (SWAT+'s aquifer passing recharge through). A joint
+   PEST++ IES pass on the parameters the feedback touches, against streamflow (low flows), heads and base flow
+   together.
+
+**The blocker:** there is no SWAT+ project for Plaster Creek on the hydrofabric yet. That is the hydrofabric
+builder (`basinledger.hydrofabric`, stubbed).
+- **Until then, stage 2 can be prepared against NextGen's recharge** (CFE's percolation), flagged as an interim
+  forcing. The parameter step for MODFLOW 6 (`calibration.apply_parameters`), the PEST++ files, and the observation
+  set (Wellogic heads, Eckhardt base flow) don't depend on where the recharge comes from.
+- **swatplus-bmi 0.2.0** is planned in the swatplus-bmi session: channel depth for river stage, and recharge per HRU
+  for mapping by area.
+
 ## Next
 
-1. Fit the groundwater model (specific yield, glacial K, streambed conductance) to base flow and heads, with
-   PEST++ IES. That needs the calibration module's parameter step (`calibration.apply_parameters`) for MODFLOW 6.
-2. Extend NextGen's forcing to 2011, for the 2012 drought: NGIAB's preprocessor (an hour's download), then
-   `rerun_nextgen.py` and the demo with `--force`.
-3. Existing pumping: Wellogic high-capacity wells (`PMP_CPCITY >= 70` gpm, or `WWAT_ID`) as generic users, once
+1. The SWAT+ project for Plaster Creek on the hydrofabric (the builder), then stage 1.
+2. Stage 2, prepared now on NextGen recharge as an interim forcing:
+   - `calibration.apply_parameters` for MODFLOW 6 (K and streambed multipliers, Sy, Ss, through the builder's
+     arguments);
+   - the observation set;
+   - PEST++ IES files.
+3. Extend the forcing to 2011, for the 2012 drought. For NextGen that means NGIAB's preprocessor (an hour's
+   download), then `rerun_nextgen.py` and the demo with `--force`. For SWAT+ it means AORC.
+4. Existing pumping: Wellogic high-capacity wells (`PMP_CPCITY >= 70` gpm, or `WWAT_ID`) as generic users, once
    volumes can be placed.
-4. The Lower Grand: the same build, several gages (docs/ideas.md).
+5. The Lower Grand: the same build, with several gages (docs/ideas.md).
 
 ## Data and runs (outside git)
 
