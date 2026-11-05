@@ -71,15 +71,48 @@ any place or any kind of water user.
 
 ## Install
 
-Needs Python 3.11 or later, [uv](https://docs.astral.sh/uv/), and gfortran for SWAT+ (on macOS, Homebrew's `gcc`).
+Needs Python 3.11 or later, and gfortran for SWAT+ (on macOS, Homebrew's `gcc`).
+
+```bash
+pip install "basinledger[users,nextgen]"      # or: uv add "basinledger[users,nextgen]"
+```
+
+The extras:
+
+- **`users`:** the water-user models from `waterledger-models` (`CoolingWaterBmi`);
+- **`nextgen`:** netCDF4, for reading NextGen runs.
+
+Two model programs aren't Python packages, and come separately:
+
+- **SWAT+** is built by swatplus-bmi, which is installed with Basin Ledger. It fetches SWAT+ 62.0.1, patches it and
+  builds it, in a few minutes:
+
+  ```bash
+  swatplus-bmi build
+  ```
+
+- **MODFLOW 6's shared library** (`libmf6`) comes from USGS's release through flopy's `get-modflow`, also installed
+  with Basin Ledger. Basin Ledger looks for it where `:flopy` puts it, or at `$LIBMF6`:
+
+  ```bash
+  get-modflow :flopy --repo modflow6 --subset mf6,libmf6.dylib     # libmf6.so on Linux
+  ```
+
+From a source checkout, for development and the tests, with [uv](https://docs.astral.sh/uv/):
 
 ```bash
 git clone https://github.com/northlinehydrology/basin-ledger && cd basin-ledger
 uv sync
 uv run python examples/synthetic/fetch.py --get     # builds SWAT+ (swatplus-bmi build) and fetches libmf6 (get-modflow)
-uv run pytest                                       # about a minute, one core
+uv run pytest                                       # about a minute on one core; -m "not slow" takes about 10 s
 uv run --group examples marimo edit examples/synthetic/notebook.py
 ```
+
+Continuous testing:
+
+- **On every push:** CI runs the whole suite on Ubuntu and macOS (`.github/workflows/test.yml`).
+- **Every night:** a run checks against the newest releases of swatplus-bmi, waterledger-models, flopy and
+  MODFLOW 6 (`nightly.yml`).
 
 ## Use
 
@@ -139,7 +172,7 @@ head_min = 88.3
 limit = 0.002
 ```
 
-![Drawdown in the synthetic example](docs/figures/synthetic-drawdown.png)
+![Drawdown in the synthetic example](https://raw.githubusercontent.com/northlinehydrology/basin-ledger/main/docs/figures/synthetic-drawdown.png)
 
 *The synthetic example: SWAT+'s Osu_1hru recharge drives a small MODFLOW 6 aquifer, and a synthetic user pumps one
 well. Drawdown is the difference from the same run without the user.*
