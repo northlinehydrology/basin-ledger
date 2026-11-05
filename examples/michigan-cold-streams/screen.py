@@ -28,6 +28,7 @@ HERE = Path(__file__).parent
 TO_M = Transformer.from_crs(4326, 5070, always_xy=True).transform  # CONUS Albers, metres
 MGD_M3D = 3785.411784  # 1 Mgal/d in m3/d
 NEAR_KM = 15.0  # "near" a basin, for tracker records
+AREA_RATIO = (0.8, 1.25)  # NLDI basin area over USGS drainage area; outside this the basin isn't scored
 
 # weights of the score's parts; the README gives the reasons
 WEIGHTS = {"cold": 2.0, "groundwater": 1.0, "temperature_data": 1.0, "aquifer": 1.0, "siting": 1.0,
@@ -171,6 +172,8 @@ def main() -> int:
                                      and b.area > poly.area)
         rows.append(row)
 
+    mismatched = [r for r in rows if not AREA_RATIO[0] <= r["km2"] / r["usgs_km2"] <= AREA_RATIO[1]]
+    rows = [r for r in rows if r not in mismatched]
     score_parts(rows)
     rows.sort(key=lambda r: -r["score"])
 
@@ -181,8 +184,12 @@ def main() -> int:
         for r in rows:
             w.writerow({k: (round(v, 3) if isinstance(v, float) else v) for k, v in r.items()})
     statewide = json.loads((d / "vsec_by_ecoregion.json").read_text())
-    (HERE / "screen.json").write_text(json.dumps({"weights": WEIGHTS, "basins": rows, "ecoregions": statewide},
-                                                 indent=1, default=float))
+    (HERE / "screen.json").write_text(json.dumps(
+        {"weights": WEIGHTS, "basins": rows, "area_mismatch": [{k: r[k] for k in ("site", "name", "km2", "usgs_km2")}
+                                                               for r in mismatched], "ecoregions": statewide},
+        indent=1, default=float))
+    print(f"{len(rows)} basins scored; area mismatch, not scored: "
+          + ", ".join(f"{r['site']} ({r['km2']:.0f} vs {r['usgs_km2']:.0f} km2)" for r in mismatched))
     for r in rows[:15]:
         print(f"{r['score']:.2f} {r['site']} {r['name'][:40]:40} {r['km2']:7.0f} cold {r['cold_share']:.2f} "
               f"bfi {r['bfi']:.2f} trout {r['trout_km']:5.0f} T {r['temp_years_at_gage']:4.1f} "

@@ -83,18 +83,18 @@ cover both ends, the north where most of the cold water is and the south where m
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | Jordan River near East Jordan (04127800) | 175 | 1.00 | 182 | 0.80 | 17 | 1 | 0.30 | 7 / 2 | 22 | none | Vanderbilt Moraines | 0.82 |
 | 2 | Dowagiac River at Sumnerville (04101800) | 659 | 0.46 | 215 | 0.77 | 0 | 1,134 | 0.72 | 67 / 9 | 67 | in basin | Battle Creek Outwash Plain | 0.79 |
-| 3 | Pine River near Hoxeyville (04125460) | 652 | 1.00 | 420 | 0.78 | 30 | 131 | 0.36 | 7 / 0 | 2 | none | Newaygo Outwash Plain | 0.75 |
+| 3 | Pine River near Hoxeyville (04125460) | 652 | 1.00 | 420 | 0.78 | 30 | 131 | 0.36 | 7 / 0 | 2 | none | Newago Outwash Plain | 0.75 |
 | 4 | Paw Paw River at Riverside (04102500) | 1,016 | 0.51 | 353 | 0.74 | 0 | 1,145 | 0.53 | 122 / 6 | 21 | within 15 km | Southern Lake Michigan Lake Plain | 0.74 |
-| 5 | White River near Whitehall (04122200) | 1,051 | 0.97 | 631 | 0.76 | 0 | 174 | 0.43 | 152 / 4 | 6 | moratorium in basin | Manistee | 0.72 |
-| 6 | Boardman River above Brown Bridge Road (04126970) | 323 | 1.00 | 141 | 0.78 | 1 | 56 | 0.56 | 0 / 0 | 9 | within 15 km | Grayling Outwash Plain | 0.72 |
-| 7 | Rifle River near Sterling (04142000) | 854 | 0.49 | 753 | 0.68 | 13 | 329 | 0.31 | 108 / 7 | 0 | none | Standish | 0.72 |
+| 5 | Rifle River near Sterling (04142000) | 854 | 0.49 | 753 | 0.68 | 13 | 329 | 0.31 | 108 / 7 | 0 | none | Standish | 0.73 |
+| 6 | White River near Whitehall (04122200) | 1,051 | 0.97 | 631 | 0.76 | 0 | 174 | 0.43 | 152 / 4 | 6 | moratorium in basin | Manistee | 0.72 |
+| 7 | Boardman River above Brown Bridge Road (04126970) | 323 | 1.00 | 141 | 0.78 | 1 | 56 | 0.56 | 0 / 0 | 9 | within 15 km | Grayling Outwash Plain | 0.72 |
 | 8 | Clinton River at Sterling Heights (04161820) | 811 | 0.09 | 160 | 0.70 | 30 | 557 | 0.42 | 92 / 3 | 4 | in basin | Maumee Lake Plain | 0.72 |
-| 9 | Little Muskegon River near Oak Grove (04121944) | 965 | 0.41 | 602 | 0.73 | 31 | 34 | 0.45 | 0 / 0 | 39 | within 15 km | Newaygo Outwash Plain | 0.70 |
-| 10 | Rogue River near Rockford (04118500) | 675 | 0.46 | 572 | 0.72 | 0 | 108 | 0.30 | 92 / 7 | 7 | in basin | Lansing | 0.70 |
+| 9 | Rogue River near Rockford (04118500) | 675 | 0.46 | 572 | 0.72 | 0 | 108 | 0.30 | 92 / 7 | 7 | in basin | Lansing | 0.70 |
+| 10 | Little Muskegon River near Oak Grove (04121944) | 965 | 0.41 | 602 | 0.73 | 31 | 34 | 0.45 | 0 / 0 | 39 | within 15 km | Newago Outwash Plain | 0.70 |
 | 11 | Platte River at Honor (04126740) | 331 | 0.67 | 87 | 0.80 | 0 | 6 | 0.77 | 4 / 2 | 1 | within 15 km | Manistee | 0.69 |
 | 12 | Fish Creek near Crystal (04115265) | 97 | 1.00 | 59 | 0.74 | 0 | 1 | 0.44 | 10 / 1 | 66 | none | Lansing | 0.69 |
 
-All 80 basins and every measure are in `screen.csv`; `screen.json` adds the statewide ecoregion sums.
+All 78 scored basins and every measure are in `screen.csv`; `screen.json` adds the statewide ecoregion sums and the basins left out.
 
 The Clinton River ranks eighth on data and siting alone; its cold share is 0.09. Gage temperature "years" are the
 span of the daily record, not a count of complete years.
@@ -102,7 +102,9 @@ span of the daily record, not a count of complete years.
 ## Method
 
 **Units.** Each unit is a USGS streamgage with daily discharge from at least 20 years, still reporting in 2024 or
-later, with a drainage area of 100 to 1,500 km² (81 gages), and its NLDI basin (80; NLDI has none for 04057814).
+later, with a drainage area of 100 to 1,500 km² (81 gages), and its NLDI basin (80; NLDI has none for 04057814). Two
+NLDI basins disagree with USGS's drainage area by more than 25% and aren't scored: Pigeon River near Vanderbilt
+(04128990, 201 vs 149 km²) and Farmers Creek near Lapeer (04146000, 9 vs 143 km²). That leaves 78.
 Nested basins are kept and marked in `nested_in`.
 
 **Measures**, by criterion:
@@ -132,7 +134,7 @@ Nested basins are kept and marked in `nested_in`.
 
 Basin size (100 to 1,500 km²) is a condition for entry, not part of the score.
 
-**Score.** Each part is a percentile rank among the 80 basins or a simple step, in [0, 1]. The score is their weighted
+**Score.** Each part is a percentile rank among the 78 basins or a simple step, in [0, 1]. The score is their weighted
 mean:
 
 | Part | Weight | Built from |
