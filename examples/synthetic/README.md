@@ -14,11 +14,29 @@ The engine's test case. It wires real models, but the place and the numbers mean
 - **Calibration:** none, and no record, so the engine labels it a screening run. Its objects keep their SWAT+
   names; it has no hydrofabric.
 
+Two more configs use the same SWAT+ project:
+
+- **`surface.toml`:** surface routes, a utility and rules.
+  - A mill (`mill.toml`) takes water from Osu_1hru's channel through a SWAT+ water allocation place of use and
+    returns 70% of it through a point source. It is curtailed the day after the channel's outflow falls below
+    0.004 m³/s.
+  - The plant is on a utility, `city`. The utility pumps well `pw1`, adds existing customers (0.002 m³/s) and 10%
+    distribution losses, and discharges its sewer flow to the channel through a treatment plant's point source.
+  - The plant runs dry the day after low flow, and its withdrawal is capped the day after the head at the well falls
+    below 88.3 m.
+- **`two_way.toml`:** the stream-aquifer exchange, both ways.
+  - The MODFLOW 6 grid is 10 × 10 cells of 1,000 m², exactly Osu_1hru's 10 ha aquifer, so the recharge maps area for
+    area (`area_rtol`).
+  - SWAT+'s aquifer passes its recharge through. MODFLOW 6's river exchange enters SWAT+'s channel the next day, as a
+    point source where the river gains and as a water allocation demand where it loses.
+  - A small user pumps a well near the river (`small_user.toml`).
+
 Run it:
 
 ```bash
 uv run python examples/synthetic/fetch.py --get                     # SWAT+ (2 compile jobs) and libmf6, if missing
-uv run pytest                                                       # the tests use this example (3 years)
+uv run pytest                                                       # the tests use these configs
+uv run python -m basinledger run examples/synthetic/surface.toml    # outputs in runs/synthetic-surface/base/outputs
 uv run --group examples marimo edit examples/synthetic/notebook.py  # the whole period, with and without the user
 ```
 

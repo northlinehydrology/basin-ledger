@@ -18,23 +18,23 @@ Every volume and mass that moves between models is entered in a ledger twice, as
 they differ stops the run. Basin Ledger is a sibling of [Water Ledger](https://waterledger.org). Water Ledger
 estimates one campus's water from public data. Basin Ledger follows that water through a basin's streams and aquifers.
 
-**Status: early.** Built so far:
+**Status: early.** Built and tested on synthetic examples:
 
-- the water-user interface;
-- SWAT+ recharge into MODFLOW 6 (one-way), with users pumping from MODFLOW 6 wells;
-- the ledger;
-- tests on a synthetic example.
+- the water-user interface, with controls a rule can set (a withdrawal limit, dry mode);
+- routes: MODFLOW 6 wells, SWAT+ water allocation intakes and point sources, outfalls;
+- the utility chain: sources, losses, sewer, plant outfall;
+- feedback rules: curtailment, dry mode, drawdown limit;
+- SWAT+ recharge into MODFLOW 6 (one-way), and the two-way stream-aquifer exchange through MODFLOW 6's river package;
+- restarts from a saved day that match unbroken runs bit for bit;
+- the ledger and the command line;
+- the calibration module's structure. An example without calibrated models is labelled a screening run.
 
-The design for the rest is in [docs/design.md](docs/design.md):
+Still to come ([docs/design.md](docs/design.md)):
 
-- the utility chain;
-- feedback rules (curtailment, dry mode, drawdown limits);
-- two-way stream-aquifer exchange;
 - NextGen geography throughout: SWAT+ built on the hydrofabric, results keyed to its ids;
 - AORC forcing;
-- calibration as part of every example, jointly with PEST++ IES where there's feedback. An example without
-  calibrated models is a screening run, never a study result;
-- scenarios from a shared warm-up.
+- applying calibration parameters and PEST++ IES;
+- the first real example, Plaster Creek.
 
 ## How it works
 
@@ -60,11 +60,21 @@ Needs Python 3.11 or later, [uv](https://docs.astral.sh/uv/), and gfortran for S
 git clone https://github.com/northlinehydrology/basin-ledger && cd basin-ledger
 uv sync
 uv run python examples/synthetic/fetch.py --get     # builds SWAT+ (swatplus-bmi build) and fetches libmf6 (get-modflow)
-uv run pytest                                       # about 15 seconds
+uv run pytest                                       # about a minute, one core
 uv run --group examples marimo edit examples/synthetic/notebook.py
 ```
 
 ## Use
+
+```bash
+uv run python -m basinledger run examples/synthetic/surface.toml              # writes ledger.csv, series.csv, summary.json
+uv run python -m basinledger run examples/synthetic/surface.toml --baseline   # the same without its water users
+uv run python -m basinledger run examples/synthetic/two_way.toml --save-at 365 --save runs/warm
+uv run python -m basinledger run examples/synthetic/two_way.toml --restart runs/warm --run scenario
+uv run python -m basinledger status examples/synthetic/surface.toml           # calibrated, or a screening run
+```
+
+Or from Python:
 
 ```python
 from basinledger.driver import Basin
@@ -91,11 +101,25 @@ map = "all:aqu001"             # SWAT+ aquifers to MODFLOW 6 cells by area, or a
 name = "pw1"
 cell = [0, 20, 28]
 
+[[utilities]]
+name = "city"
+sources = [{route = "well:pw1", share = 1.0}]
+losses = 0.10
+outfall = "swat:point_source:wwtp"
+
 [[users]]
 name = "plant"
 component = "basinledger.testing:SyntheticUser"   # or waterledger_models.datacenter.bmi:CoolingWaterBmi
-withdrawal = "well:pw1"
-return = "outfall:creek"
+withdrawal = "utility:city"
+return = "utility:city"
+
+[[rules]]
+name = "plant well limit"
+kind = "drawdown_limit"
+user = "plant"
+cell = [0, 20, 28]
+head_min = 88.3
+limit = 0.002
 ```
 
 ![Drawdown in the synthetic example](docs/figures/synthetic-drawdown.png)
@@ -124,6 +148,12 @@ volumes the hydrologic models take. See [docs/design.md](docs/design.md#water-us
 | Wells | pumped = requested = the user's withdrawal, every day |
 | MODFLOW 6's budget | closes every day to 1e-7 of the gross flow, with and without pumping |
 | Physics | pumping draws down most at the well, and depletes the river by less than it pumps, more over time |
+| Surface routes | SWAT+ takes what was asked (or reports the shortfall); the channel's flow changes the same day by what the users put in and took out |
+| Utility chain | production = delivery + losses = the sum of its sources; sewer = plant outfall |
+| Rules | act on exactly the days after the trigger; a curtailed user takes nothing; dry mode uses less water and more electricity |
+| Two-way exchange | SWAT+'s aquifer returns nothing and stores exactly its recharge; each day's river exchange reaches SWAT+ the next day, whole |
+| Restarts | saved after a warm-up and carried on, runs match unbroken runs bit for bit |
+| Command line, calibration | outputs and status written; statistics on known values; the forward model writes simulated values at observations |
 
 ## Prior work
 
