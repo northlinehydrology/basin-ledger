@@ -13,10 +13,15 @@ what, why, and how Basin Ledger copes until then. Written Nov 4, 2026.
    infinity means no limit). Curtailment and well drawdown rules set it before each day. `CoolingWaterBmi` should
    meet a limit the way a campus would: by running dry or with more assist, using more electricity. Its balance must
    still close, and the electricity must follow. Until then, rules can only be tested on the synthetic user.
-   *Status (requests 2 to 4): decided for the release after 3.10.0 (3.10.0 ships with the pyyaml fix only). Until then Basin Ledger's rules are tested on the synthetic user. The design: a limit
-   caps the wet share of heat rejected each step and re-solves the heat balance, so electricity rises as the plant
-   runs drier, and a limit of 0 is dry mode. Return load = intake concentration × (withdrawal − evaporation − drift's
-   share).*
+   *Status (requests 2 to 4): decided for the release after 3.10.0, which ships with the pyyaml fix only. Until
+   then Basin Ledger's rules are tested on the synthetic user. The design follows realistic operation:*
+   - *The heat to remove is fixed, since the campus must hold its temperature. A limit caps the wet share of the heat
+     rejected each step, and the heat balance is solved again.*
+   - *Capped evaporative duty moves to dry coolers and chillers, at more electricity. A limit of 0 is dry mode.*
+   - *Heat the installed dry and chiller capacity can't take is reported as heat not removed (IT load that would
+     have to be shed), never dropped.*
+   - *Energy and water balances close every hour.*
+   - *Return load = intake concentration × (withdrawal − evaporation − drift's share).*
 3. **A dry-mode input on `CoolingWaterBmi`**, for days a rule calls for no evaporative cooling. It may be the same
    mechanism as the limit, with a limit of zero for cooling water.
 4. **Intake concentrations and return loads.** For quality balances, a user needs the concentration of what it takes
