@@ -41,4 +41,9 @@ low_flow_7day = {year_2021 = [0.161, 0.196], year_2022 = [0.232, 0.270], note = 
 
 [models.modflow6]
 status = "screening"
-note = "No groundwater model in this example yet. Would need calibration to Michigan well records."
+compared_to = "heads (Wellogic) and base flow at the gage; not fitted yet"
+model = "groundwater/ (groundwater.toml, groundwater-wells.toml): 250 m, 3 layers, built from public data"
+note = """Steady heads against 55 Wellogic drift wells completed since 2000: mean error +1.9 m, RMSE 7.9 m (66 m range).
+Gross discharge to streams against an Eckhardt separation of the gage record: mean within 4% (-4% calibration, +4%
+validation), but too steady: daily NSE about 0, and 76-93% too high on below-median-flow days. To be fitted with
+PEST++ IES (specific yield, glacial K, streambed conductance). Details: groundwater/README.md, groundwater/results.json."""

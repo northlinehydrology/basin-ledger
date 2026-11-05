@@ -17,7 +17,7 @@ catchments of the NextGen hydrofabric v2.2. This is Basin Ledger's first example
     2 m temperature and humidity.
   - It is on utility water from outside the basin, and its wastewater is treated outside the basin. The stream sees
     neither. The utility's 10% distribution losses are an assumption [A].
-- **Nothing else.** There is no groundwater model and no water quality yet.
+- **Groundwater:** a screening MODFLOW 6 model, in its own configs (below). There is no water quality yet.
 
 ## What is calibrated, and what isn't
 
@@ -57,8 +57,21 @@ Not calibrated, or only approximately:
   this case. A user that takes from or returns to the creek would need NextGen to see it. nextgen-michigan does that
   inside the NextGen run, with its WaterUsers component. Replaying those scenario runs, and comparing them with this
   baseline in the ledger, is the next step.
-- **No MODFLOW 6 yet.** The run's outputs don't include CFE's percolation to groundwater. A rerun with that flux added
-  to the realization's output variables would give MODFLOW 6 its recharge.
+- **MODFLOW 6 is screening.** Its recharge comes from a rerun of NextGen with CFE's percolation in its outputs
+  (`groundwater/rerun_nextgen.py`). Streamflow in the rerun is identical to the calibrated run.
+
+## Groundwater (screening) and the demo
+
+A MODFLOW 6 model under the same calibrated surface is in `groundwater/`. Its configs are `groundwater.toml` (the
+campus on utility water) and `groundwater-wells.toml` (the campus on its own well).
+- Its recharge is CFE's daily percolation, from a NextGen rerun with that flux in its outputs.
+- Its river stages follow t-route's depth.
+- It is built from public data (USGS 3DEP and SIM 3392, Michigan geology, Wellogic) and isn't fitted yet. See
+  `groundwater/README.md` for the methods and the fit.
+
+`demo.py` answers one question with it: the campus on its own well against utility water, in the median and the
+driest year, and Glover's method against the coupled model. The results page is
+[docs/plaster-creek-demo.md](../../docs/plaster-creek-demo.md). Progress and resume steps are in `PROGRESS.md`.
 
 ## Run it
 
