@@ -185,12 +185,14 @@ class Basin:
             for _, wu in self.users:
                 wu.fast_forward(self.day)
 
-    @staticmethod
-    def _exchange_channels(ex) -> list[str]:
+    def _exchange_channels(self, ex) -> list[str]:
+        """The channels the exchange map couples, in order; needed before SWAT+ starts, for their objects."""
         spec = ex.get("map", "")
         if spec.startswith("all:"):
             return [spec[4:]]
-        raise NotImplementedError("exchange maps from CSV need their channels listed before SWAT+ starts (not yet)")
+        import csv
+        with open(self.cfg.folder / spec, newline="") as f:
+            return list(dict.fromkeys(r["object"] for r in csv.DictReader(f)))
 
     def _area_map(self, spec: str, aquifers: list[str]) -> AreaMap:
         if spec.startswith("all:"):
