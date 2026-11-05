@@ -1,0 +1,81 @@
+# Push a tag v* (for example v0.1.0) to release:
+#   build           SWAT+ and MODFLOW 6 fetched, the full test suite, the package built and checked
+#   github-release  the GitHub release, notes from that version's section of CHANGELOG.md; with the repository
+#                   switched on in Zenodo, the release is archived there with a DOI
+#   pypi            the package published by trusted publishing (no stored token), from the environment pypi
+#   check           the published package installed from PyPI in a clean environment and imported
+# The release doesn't wait for PyPI, so a DOI is minted even if the PyPI job fails; that job can be re-run.
+
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y gfortran
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked
+      - name: The tag matches the package version
+        run: test "${GITHUB_REF_NAME#v}" = "$(uv run python -c 'import basinledger; print(basinledger.__version__)')"
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: uv run python examples/synthetic/fetch.py --get
+      - run: uv run pytest -q
+      - run: |
+          uv build
+          uvx twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          awk -v h="## $v " 'index($0,h)==1{on=1;next} /^## /{on=0} on' CHANGELOG.md > notes.md
+          test -s notes.md
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "Basin Ledger $v" --notes-file notes.md
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/basinledger/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  check:
+    needs: pypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: astral-sh/setup-uv@v5
+      - name: Install from PyPI in a clean environment and import
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          uv venv --python 3.11 clean
+          for i in 1 2 3 4 5 6; do
+            uv pip install --python clean/bin/python --refresh "basinledger[users,nextgen]==$v" && break
+            sleep 30
+          done
+          clean/bin/python -c "import basinledger, basinledger.driver, basinledger.coupling.nextgen; print(basinledger.__version__)"
+          clean/bin/basinledger --help
