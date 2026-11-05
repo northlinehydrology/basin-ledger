@@ -41,3 +41,32 @@ def build(workspace: str | Path, days: int, start: dt.date) -> Path:
                            saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")], printrecord=[("BUDGET", "ALL")])
     sim.write_simulation(silent=True)
     return ws
+
+
+SMALL_CELL = 1000.0 ** 0.5  # m: 10 x 10 cells of 1,000 m2 make 10 ha, the area of Osu_1hru's aquifer
+SMALL_WELL = (0, 5, 6)
+
+
+def build_small(workspace: str | Path, days: int, start: dt.date) -> Path:
+    """A 10 ha aquifer under Osu_1hru for the two-way exchange: 10 x 10 cells, the river along the west edge.
+    Thinner and less permeable than the large grid so the river can lose water when the well pumps hard."""
+    ws = Path(workspace)
+    sim = flopy.mf6.MFSimulation(sim_name="synthetic_small", sim_ws=ws, exe_name="mf6")
+    flopy.mf6.ModflowTdis(sim, time_units="days", start_date_time=start.isoformat(),
+                          nper=1, perioddata=[(float(days), days, 1.0)])
+    flopy.mf6.ModflowIms(sim, complexity="simple", outer_dvclose=1e-8, inner_dvclose=1e-10,
+                         rcloserecord=[1e-8, "strict"])
+    gwf = flopy.mf6.ModflowGwf(sim, modelname="gwf", save_flows=True)
+    flopy.mf6.ModflowGwfdis(gwf, length_units="meters", nlay=1, nrow=10, ncol=10, delr=SMALL_CELL, delc=SMALL_CELL,
+                            top=100.0, botm=70.0)
+    flopy.mf6.ModflowGwfnpf(gwf, icelltype=0, k=2.0)
+    flopy.mf6.ModflowGwfsto(gwf, iconvert=1, sy=0.15, ss=1e-5, transient={0: True})
+    flopy.mf6.ModflowGwfic(gwf, strt=RIVER_STAGE)
+    flopy.mf6.ModflowGwfrcha(gwf, recharge=0.0, pname="rch")
+    flopy.mf6.ModflowGwfwel(gwf, stress_period_data={0: [(SMALL_WELL, 0.0)]}, pname="wel")
+    flopy.mf6.ModflowGwfriv(gwf, stress_period_data={0: [((0, r, 0), RIVER_STAGE, 20.0, RIVER_STAGE - 2.0)
+                                                         for r in range(10)]}, pname="riv")
+    flopy.mf6.ModflowGwfoc(gwf, budget_filerecord="gwf.cbc", head_filerecord="gwf.hds",
+                           saverecord=[("HEAD", "ALL"), ("BUDGET", "ALL")], printrecord=[("BUDGET", "ALL")])
+    sim.write_simulation(silent=True)
+    return ws

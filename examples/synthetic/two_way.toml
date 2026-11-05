@@ -1,0 +1,35 @@
+name = "synthetic-two-way"
+description = """Osu_1hru over a 10 ha MODFLOW 6 aquifer of the same area, coupled both ways: SWAT+ recharge into
+MODFLOW 6, and MODFLOW 6's river exchange back into SWAT+'s channel the next day, with SWAT+'s aquifer passing its
+recharge through. A synthetic user pumps a well near the river. For the engine's tests only."""
+
+[run]
+folder = "../../runs/synthetic-two-way"
+
+[swatplus]
+project = "{swatplus_refdata}/Osu_1hru"
+
+[modflow6]
+builder = "model:build_small"
+
+[recharge]
+map = "all:aqu001"
+area_rtol = 1e-6          # the grid is exactly Osu_1hru's 10 ha aquifer
+
+[exchange]
+package = "riv"
+map = "all:cha01"
+
+[[wells]]
+name = "pw1"
+cell = [0, 5, 6]
+
+[[users]]
+name = "plant"
+component = "basinledger.testing:SyntheticUser"
+config = "small_user.toml"
+withdrawal = "well:pw1"
+return = "outfall:offsite"
+
+[outputs]
+heads = [{name = "pw1", cell = [0, 5, 6]}]
