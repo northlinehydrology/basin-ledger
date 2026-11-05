@@ -1,20 +1,86 @@
-"""Feedback rules: decisions made each day from the models' state, applied to the next day. Not built yet.
+"""Feedback rules: decisions made at the pause between days, from the models' state, applied to the coming day.
 
-A rule reads state at the pause between days (yesterday's flow, today's well heads) and sets limits for the coming
-day. Planned rules:
+A rule reads the state at the end of yesterday (SWAT+ channel flow, MODFLOW 6 heads) and returns controls for a user's
+coming day: ``limit`` (a cap on withdrawal, m3 s-1) and ``dry_mode`` (1 = run without evaporative cooling). The user
+component must take that control as an input (``users.CONTROLS``); otherwise the rule is refused when the run starts.
 
-- **Curtailment.** Cap a river withdrawal when yesterday's flow is below a threshold (a percentile, a pass-by flow,
-  Michigan's Water Withdrawal Assessment index flow).
-- **Dry mode.** Tell a cooling user to run dry (no evaporation, more electricity) on days a rule says so. Needs an
-  input on the user component (see docs/requests.md).
-- **Drawdown limit.** Cut a well's pumping when the head in its cell, or at a sentinel cell, falls below a limit.
+Built-in rules (``[[rules]]`` in an example's config):
 
-Every user component that takes limits exposes ``water_user_water__withdrawal_volume_flux_limit`` (m3 s-1) as an
-input; the rule sets it before the user's day is stepped. A rule is a small function, ``rule(state) -> limits``, so a
-study can write its own in its example.
+    kind = "curtailment"      user, channel, threshold (m3 s-1), limit (m3 s-1, default 0)
+                              cap the user's withdrawal the day after its channel's flow was below the threshold
+    kind = "dry_mode"         user, channel, threshold (m3 s-1)
+                              run the user dry the day after the flow was below the threshold
+    kind = "drawdown_limit"   user, cell [layer, row, col], head_min (m), limit (m3 s-1, default 0)
+                              cap the user's withdrawal the day after the head in that cell was below head_min
+
+A study can add its own: ``kind = "rules:my_rule"`` names a function in the example folder,
+``my_rule(state, **settings) -> {user: {control: value}}``.
+
+When several rules give the same user the same control, the strictest wins: the smallest limit, and dry if any says
+dry. Every rule's decision is entered in the ledger (``rule:<name>:active``, 1 or 0) so a run shows when it acted.
 """
 
+from __future__ import annotations
 
+import math
+from dataclasses import dataclass, field
+
+
+@dataclass
+class State:
+    """What a rule may read at the pause before day ``day``: yesterday's results."""
+
+    day: int
+    flows: dict[str, float]                 # channel -> outflow, m3 s-1, yesterday
+    head_at: object                         # (layer, row, col) -> head, m, after yesterday's solve
+    memory: dict = field(default_factory=dict)  # a rule's own memory between days (saved with restarts)
+
+
+def curtailment(state: State, *, user: str, channel: str, threshold: float, limit: float = 0.0):
+    q = state.flows.get(channel)
+    if q is None:
+        raise KeyError(f"curtailment: channel {channel!r} not in SWAT+")
+    return {user: {"limit": float(limit)}} if (state.day > 0 and q < threshold) else {}
+
+
+def dry_mode(state: State, *, user: str, channel: str, threshold: float):
+    q = state.flows.get(channel)
+    if q is None:
+        raise KeyError(f"dry_mode: channel {channel!r} not in SWAT+")
+    return {user: {"dry_mode": 1.0}} if (state.day > 0 and q < threshold) else {}
+
+
+def drawdown_limit(state: State, *, user: str, cell, head_min: float, limit: float = 0.0):
+    if state.day == 0:
+        return {}
+    h = state.head_at(tuple(cell))
+    return {user: {"limit": float(limit)}} if h < head_min else {}
+
+
+BUILT_IN = {"curtailment": curtailment, "dry_mode": dry_mode, "drawdown_limit": drawdown_limit}
+
+
+@dataclass
 class Rule:
-    def __call__(self, state) -> dict:
-        raise NotImplementedError("feedback rules are planned; see docs/design.md")
+    name: str
+    fn: object
+    settings: dict
+
+    def __call__(self, state: State) -> dict:
+        return self.fn(state, **self.settings) or {}
+
+
+def combine(decisions: list[dict]) -> dict[str, dict[str, float]]:
+    """The strictest control per user: the smallest limit, and dry if any rule says dry."""
+    out: dict[str, dict[str, float]] = {}
+    for d in decisions:
+        for user, controls in d.items():
+            c = out.setdefault(user, {})
+            for k, v in controls.items():
+                if k == "limit":
+                    c[k] = min(c.get(k, math.inf), v)
+                elif k == "dry_mode":
+                    c[k] = max(c.get(k, 0.0), v)
+                else:
+                    raise KeyError(f"unknown control {k!r}")
+    return out
