@@ -1,0 +1,35 @@
+name = "plaster-creek"
+description = """Plaster Creek above USGS 04119055 (Kentwood, Kent County, Michigan), 16 NextGen catchments, 124 km2.
+NextGen (Noah-OWP-Modular and CFE on hydrofabric v2.2, NWM v3 retrospective forcing, t-route), calibrated to the
+gage in two stages, replayed day by day. A 300 MW tower-cooled campus on utility water from outside the basin, with
+its wastewater treated outside the basin, is accounted beside it with CoolingWaterBmi on the same hourly weather."""
+
+[run]
+folder = "../../runs/plaster-creek"
+
+[nextgen]
+# the calibrated baseline from nextgen-michigan (its README, steps 3 to 6): stage-2 parameters, no users
+run = "{nextgen_michigan}/runs/scenarios/baseline"
+
+[calibration]
+record = "calibration/record.toml"
+
+[[utilities]]
+name = "grand-rapids"
+# water from outside the basin, wastewater treated outside the basin: the stream sees neither
+sources = [{route = "offsite:supply", share = 1.0}]
+losses = 0.10             # [A]
+outfall = "offsite:wastewater-plant"
+
+[[users]]
+name = "campus"
+component = "waterledger_models.datacenter.bmi:CoolingWaterBmi"
+config = "campus.yaml"
+withdrawal = "utility:grand-rapids"
+return = "utility:grand-rapids"
+forcing = {source = "nextgen", catchment = "cat-652066"}
+variables = {withdrawal = "data_center_cooling_water__withdrawal_volume_flux", consumption = "data_center_cooling_water__consumption_volume_flux", return = "data_center_cooling_water__return_volume_flux", gain = "data_center_cooling_water__condensate_volume_flux", power = "data_center__electric_power"}
+constituents = {}
+
+[outputs]
+channels = ["wb-652056", "wb-652066"]

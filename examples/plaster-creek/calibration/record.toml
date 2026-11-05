@@ -1,0 +1,44 @@
+# Calibration record: Plaster Creek above USGS 04119055
+#
+# What is calibrated: streamflow at the gage, by NextGen. Nothing else in this example is. A MODFLOW 6 model, if one
+# is added, and any water quality stay screening until calibrated to Michigan well records and the Plaster Creek TMDL
+# data. The calibration is for the gage, not the ungaged headwaters: every catchment has the same parameter set.
+
+date = "2026-11-04"
+basin = "Plaster Creek above USGS 04119055, Plaster Creek at 28th Street, Kentwood, Michigan; 16 catchments, 124 km2"
+hydrofabric = "NextGen hydrofabric v2.2"
+
+[models.nextgen]
+status = "calibrated"
+target = "daily streamflow at USGS 04119055 (flowpath wb-652056)"
+setup = "NGIAB v2.1.0 (ngen serial), SLOTH + Noah-OWP-Modular + CFE, t-route; NWM v3 retrospective forcing"
+source = "github.com/northlinehydrology/nextgen-michigan, docs/calibration.md; run folder runs/plaster-cal2 (stage 2)"
+method = """Two stages with ngen-cal (DDS, 100 iterations, KGE on hourly flow, one parameter set for every catchment).
+Stage 1 fit peaks and volume but drained CFE's groundwater store in about 3 days. Stage 2 held the store's
+low-storage time constant to the gage's recessions (23 to 45 days) and recalibrated the rest; it gives 30 days."""
+warm_up = ["2018-10-01", "2019-10-01"]
+limits = """Low flow is approximate: the 7-day low flows are 8 to 18% below observed in 2020-2022. Validation bias is
++11% and the validation median is 18% high. Four years of weather include no drought of record. Calibrating to KGE
+alone drains the groundwater store (nextgen-michigan findings 14). The calibrated parameters are applied to the run
+by nextgen-michigan's scripts/apply_calibration.py, since ngen-cal leaves config/ unchanged (findings 13)."""
+
+[models.nextgen.calibration]
+start = "2019-10-01"
+end = "2021-05-16"
+# as published (daily means of the serial run against USGS approved daily values)
+published = {kge = 0.87, nse = 0.75, log_nse = 0.74, pbias = 0.0}
+# recomputed by examples/plaster-creek/check_calibration.py from the replayed run, against the instantaneous record
+# ngiab-cal downloaded, averaged to calendar days
+recomputed = {kge = 0.861, nse = 0.735, log_nse = 0.762, pbias = -0.5, days = 580}
+low_flow_7day = {year_2020 = [0.213, 0.231], note = "simulated, observed (m3 s-1), April-March years"}
+
+[models.nextgen.validation]
+start = "2021-05-16"
+end = "2022-12-31"
+published = {kge = 0.81, nse = 0.72, log_nse = 0.63, pbias = 11.0}
+recomputed = {kge = 0.789, nse = 0.659, log_nse = 0.672, pbias = 11.7, days = 568}
+low_flow_7day = {year_2021 = [0.161, 0.196], year_2022 = [0.232, 0.270], note = "simulated, observed (m3 s-1)"}
+
+[models.modflow6]
+status = "screening"
+note = "No groundwater model in this example yet. Would need calibration to Michigan well records."
