@@ -1,6 +1,6 @@
 # Plaster Creek groundwater and demo: progress
 
-Kept current at each commit so the work can be resumed from this file alone. Last updated: November 4, 2026, night.
+Kept current at each commit so the work can be resumed from this file alone. Last updated: November 4, 2026, late night (demo done).
 
 ## Done (on main, pushed)
 
@@ -25,19 +25,33 @@ Kept current at each commit so the work can be resumed from this file alone. Las
   slow and skips without the cache.
 - **Decided direction for utility water:** `docs/ideas.md`, section 8.
 
-## In progress
+## Also done (November 4, late)
 
-- **Uncommitted in the working tree, being verified by the demo run:**
-  - `groundwater/checks.py`: gross and net discharge, the daily budget closure;
-  - `demo.py`: the runs, four figures, the utility case, the sensitivity table, and `docs/plaster-creek-demo.md`.
-- **Next steps:**
-  1. Read `demo-results.json` and the figures in `docs/figures/plaster-demo-*.png`. Check the numbers against the
-     checks.
-  2. Commit `checks.py`, then `demo.py`, `demo-results.json`, the figures and `docs/plaster-creek-demo.md`.
-  3. Write `groundwater/README.md`: methods, choices [A], the fit.
-  4. Add a `[models.modflow6]` screening entry with the fit to `calibration/record.toml`.
-  5. Update the example README and `docs/design.md`.
-  6. Run the full suite, then push.
+- **Checks:** `groundwater/checks.py` and `groundwater/results.json`.
+  - Heads: RMSE 7.9 m (55 wells since 2000).
+  - Base flow: mean within 4%, but too steady.
+  - Daily budget closure: 2.4e-8.
+- **Demo:** `demo.py`, `demo-results.json`, the figures in `docs/figures/plaster-demo-*.png`, and the page
+  `docs/plaster-creek-demo.md`.
+  - The campus on its own well lowers the gage's 7-day low flow by 43 L/s (27%) in the driest year (2021-22) and by
+    42 L/s (20%) in the median year.
+  - MODFLOW 6 takes 63% of the pumping from the streams in the last year. Glover gives 89% with nextgen-michigan's
+    settings and 78% with MODFLOW 6's.
+  - The streambed's conductance moves the answer most: a 7-day low flow change of −24 to −52 L/s.
+  - The utility case: BGUA's maximum day plus the campus's peak day is 9.9 MGD, against an assumed 10 MGD contract
+    [A].
+- **Write-ups:** `groundwater/README.md` (methods and fit), the screening entry in `calibration/record.toml`, the
+  example README, and `docs/design.md`.
+
+## Next
+
+1. Fit the groundwater model (specific yield, glacial K, streambed conductance) to base flow and heads, with
+   PEST++ IES. That needs the calibration module's parameter step (`calibration.apply_parameters`) for MODFLOW 6.
+2. Extend NextGen's forcing to 2011, for the 2012 drought: NGIAB's preprocessor (an hour's download), then
+   `rerun_nextgen.py` and the demo with `--force`.
+3. Existing pumping: Wellogic high-capacity wells (`PMP_CPCITY >= 70` gpm, or `WWAT_ID`) as generic users, once
+   volumes can be placed.
+4. The Lower Grand: the same build, several gages (docs/ideas.md).
 
 ## Data and runs (outside git)
 
