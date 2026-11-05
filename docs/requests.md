@@ -13,7 +13,7 @@ what, why, and how Basin Ledger copes until then. Written Nov 4, 2026.
    infinity means no limit). Curtailment and well drawdown rules set it before each day. `CoolingWaterBmi` should
    meet a limit the way a campus would: by running dry or with more assist, using more electricity. Its balance must
    still close, and the electricity must follow. Until then, rules can only be tested on the synthetic user.
-   *Status (requests 2 to 4): proposed for the release after 3.10.0, pending a decision on the release. The design: a limit
+   *Status (requests 2 to 4): decided for the release after 3.10.0 (3.10.0 ships with the pyyaml fix only). Until then Basin Ledger's rules are tested on the synthetic user. The design: a limit
    caps the wet share of heat rejected each step and re-solves the heat balance, so electricity rises as the plant
    runs drier, and a limit of 0 is dry mode. Return load = intake concentration × (withdrawal − evaporation − drift's
    share).*
