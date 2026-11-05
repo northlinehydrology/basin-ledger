@@ -2,12 +2,16 @@
 
 A basin's water, quantity and quality, balanced day by day across coupled models.
 
+The code was written with AI assistance (Claude, by Anthropic), designed and directed by Andrew Sommerlot. See
+[AI use](#ai-use).
+
 Basin Ledger couples a watershed model, a groundwater model and the models of large water users through BMI, and
 steps them together one day at a time with one Python driver:
 
 - **SWAT+** through [swatplus-bmi](https://github.com/northlinehydrology/swatplus-bmi)
   ([doi:10.5281/zenodo.23963201](https://doi.org/10.5281/zenodo.23963201)), which runs stock SWAT+ 62.0.1 under
   outside control;
+- **NextGen**, as finished NextGen In A Box runs replayed day by day, with results keyed to hydrofabric ids;
 - **MODFLOW 6** through its own BMI/XMI (`libmf6`), from Python with USGS's
   [modflowapi](https://github.com/MODFLOW-ORG/modflowapi);
 - **water users** as BMI components from
@@ -18,23 +22,33 @@ Every volume and mass that moves between models is entered in a ledger twice, as
 they differ stops the run. Basin Ledger is a sibling of [Water Ledger](https://waterledger.org). Water Ledger
 estimates one campus's water from public data. Basin Ledger follows that water through a basin's streams and aquifers.
 
-**Status: early.** Built and tested on synthetic examples:
+**Status: early (0.1.0).** Built and tested:
 
 - the water-user interface, with controls a rule can set (a withdrawal limit, dry mode);
-- routes: MODFLOW 6 wells, SWAT+ water allocation intakes and point sources, outfalls;
+- routes: MODFLOW 6 wells, SWAT+ water allocation intakes and point sources, outfalls, water from and to outside the
+  basin;
 - the utility chain: sources, losses, sewer, plant outfall;
 - feedback rules: curtailment, dry mode, drawdown limit;
 - SWAT+ recharge into MODFLOW 6 (one-way), and the two-way stream-aquifer exchange through MODFLOW 6's river package;
+- NextGen as the surface model: a finished NGIAB run replayed day by day, with users on its own hourly forcing;
 - restarts from a saved day that match unbroken runs bit for bit;
 - the ledger and the command line;
-- the calibration module's structure. An example without calibrated models is labelled a screening run.
+- calibration records per model, and the calibration module's structure. An example is a screening run unless every
+  model it runs is calibrated.
+
+Examples:
+
+- **synthetic:** SWAT+'s Osu_1hru with small MODFLOW 6 models, for the tests;
+- **[Plaster Creek](examples/plaster-creek/), Michigan:** calibrated NextGen streamflow at USGS 04119055 (KGE 0.87
+  calibration, 0.81 validation, from [nextgen-michigan](https://github.com/northlinehydrology/nextgen-michigan)),
+  with an assumed campus on utility water. Only the streamflow at the gage is calibrated.
 
 Still to come ([docs/design.md](docs/design.md)):
 
-- NextGen geography throughout: SWAT+ built on the hydrofabric, results keyed to its ids;
+- SWAT+ built on the NextGen hydrofabric, for water quality on the same catchments;
+- MODFLOW 6 recharge from NextGen (CFE's percolation);
 - AORC forcing;
-- applying calibration parameters and PEST++ IES;
-- the first real example, Plaster Creek.
+- applying calibration parameters, and PEST++ IES.
 
 ## How it works
 
@@ -47,6 +61,9 @@ flowchart LR
   M -- "simulated flows, heads" --> D
   D --> L[("ledger<br/>sent = received,<br/>every day")]
 ```
+
+A NextGen run takes SWAT+'s place as a replay. It gives calibrated flows on NextGen geography, but without feedback
+(see [docs/design.md](docs/design.md#surface-models-swat-or-nextgen)).
 
 Places are examples, not code. Each example (`examples/<place>/`) is one config file that wires real models for one
 basin and its users, plus a script that fetches its public data and a short write-up. The engine knows nothing about
@@ -159,6 +176,12 @@ volumes the hydrologic models take. See [docs/design.md](docs/design.md#water-us
 
 Earlier SWAT and SWAT+ couplings with MODFLOW either compile MODFLOW-NWT into one program (SWAT-MODFLOW,
 SWAT+MODFLOW) or use SWAT+'s own gwflow module. See [docs/prior-art.md](docs/prior-art.md).
+
+## Citing
+
+Cite the archived software (Zenodo; the DOI will be listed here once the first release is archived) and, where SWAT+
+is used, swatplus-bmi ([doi:10.5281/zenodo.23963201](https://doi.org/10.5281/zenodo.23963201)). Details in
+[CITATION.cff](CITATION.cff).
 
 ## AI use
 

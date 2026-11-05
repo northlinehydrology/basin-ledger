@@ -11,4 +11,4 @@ repository, never here.
 | Example | Status | Calibration | What it is |
 |---|---|---|---|
 | [synthetic](synthetic/) | built | screening run | SWAT+'s Osu_1hru + a small MODFLOW 6 model + a synthetic water user; the tests run on it |
-| [plaster-creek](plaster-creek/) | planned | not yet | Plaster Creek, Kent County, Michigan, with a data center campus |
+| [plaster-creek](plaster-creek/) | built | streamflow at USGS 04119055 calibrated (NextGen); nothing else | Plaster Creek, Kent County, Michigan: a calibrated NextGen run replayed, an assumed campus on utility water |
