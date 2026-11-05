@@ -16,8 +16,10 @@ Status (Nov 4, 2026). Built and tested on synthetic examples:
 - restarts;
 - the ledger, the command line, and the calibration module's structure.
 
-Not built yet: the NextGen hydrofabric builder, AORC forcing, applying calibration parameters, PEST++, and the first
-real example. Each section says which parts are built.
+The first real example is built too: Plaster Creek, Michigan, on a calibrated NextGen model replayed day by day.
+
+Not built yet: the SWAT+ hydrofabric builder, AORC forcing, applying calibration parameters, and PEST++. Each section
+says which parts are built.
 
 ## Principles
 
@@ -62,6 +64,8 @@ src/basinledger/
     swatplus.py        SWAT+ project edits (places of use, point sources, pass-through aquifers), reads and sets
     recharge.py        SWAT+ aquifer recharge -> MODFLOW 6 recharge
     exchange.py        MODFLOW 6 river exchange <-> SWAT+ channels (two-way)
+    nextgen.py         a finished NextGen (NGIAB) run as the surface model, replayed day by day
+  forcing.py           hourly weather for users from the surface model's forcing
   routes.py            where a day's water goes: wells, SWAT+ places of use and point sources, outfalls
   chain.py             the utility chain: production, losses, sources, sewer, outfall
   rules.py             feedback rules: curtailment, dry mode, drawdown limits, and study-defined rules
@@ -75,7 +79,7 @@ examples/
     surface.toml       a river user, a utility with a well and a plant outfall, three rules
     two_way.toml       the stream-aquifer exchange, over an aquifer of Osu_1hru's own area
     model.py  user.toml  mill.toml  small_user.toml  fetch.py  notebook.py  README.md
-  plaster-creek/       planned: Plaster Creek (Kent County, Michigan) with a data center campus
+  plaster-creek/       Plaster Creek (Kent County, Michigan): calibrated NextGen streamflow, an assumed campus
   <place>/             any example:
     basin.toml         the config
     fetch.py           public data and observations into a cache (outside git)
@@ -99,12 +103,37 @@ Each example folder holds:
   run;
 - optionally a builder module for its MODFLOW 6 model and a notebook.
 
+## Surface models: SWAT+ or NextGen
+
+An example names one surface model: `[swatplus]` or `[nextgen]`.
+
+- **SWAT+, live.** swatplus-bmi pauses SWAT+ between days, so the driver sets withdrawals and returns for each day
+  and reads the result the same day. Everything with feedback needs this: surface routes, the two-way exchange, and
+  rules whose actions change the flow they read.
+- **NextGen, replayed.** ngen runs every catchment over the whole period and t-route routes afterward, so a NextGen
+  run can't be paused between days. Basin Ledger reads a finished NGIAB run (`coupling/nextgen.py`): daily means of
+  t-route's hourly flow and depth per flowpath, each flowpath's nexus from the hydrofabric subset, and the run's
+  forcing for users. The run appears to the driver through the same BMI calls as SWAT+, so outputs, rules, utility
+  chains and the ledger work unchanged. Objects are hydrofabric flowpaths, so every result is keyed to NextGen ids.
+- **What a replay can't do.**
+  - There is no feedback: users in Basin Ledger don't change NextGen's flows. That's exact for a user whose water
+    comes from and goes outside the basin. Users that take from or return to a stream must be inside the NextGen run,
+    as nextgen-michigan's WaterUsers component is.
+  - There are no surface routes and no two-way exchange.
+  - There is no MODFLOW 6 coupling until the run outputs CFE's percolation to groundwater.
+
+  The driver refuses each of these with a message.
+- **Why both.** NextGen is the calibrated streamflow model where one exists, on the frame the National Water Model
+  uses. SWAT+ is the model for water quality and for feedback. Where a study needs both, the plan is SWAT+ built on
+  the same hydrofabric (NextGen geography), calibrated to the same gages, with NextGen's calibrated flow as a check.
+
 ## The models and how each is driven
 
 | Model | Access | Step | What Basin Ledger reads and sets |
 |---|---|---|---|
 | SWAT+ 62.0.1 | `swatplus-bmi` (BMI 2.0, SWAT+ in its own process, commands over standard input and output) | 1 day | reads channel flow and storage, aquifer storage, depth to water, aquifer outflow and recharge; sets point source flow and water allocation demand for the next day |
 | MODFLOW 6 (6.8.2 tested) | `libmf6` through BMI/XMI, from Python with USGS `modflowapi` (in process) | 1 day (one TDIS step) | sets recharge (RCH `RECHARGE`) and well rates (WEL `Q`) between prepare and solve; reads simulated flows (`SIMVALS`), heads (`X`) |
+| NextGen (NGIAB v2.1.0 runs) | a finished run's t-route output, replayed (`coupling/nextgen.py`) | 1 day (means of hourly values) | reads flow and depth per flowpath; nothing is set |
 | Water users | BMI components from `waterledger-models` (in process) | the component's own (hourly for `CoolingWaterBmi`) | sets weather inputs and limits; reads withdrawal, consumption, return, gain, constituents, temperature, power |
 
 **The day.** For day *d* the driver:
@@ -291,7 +320,10 @@ result can be handed to ngen at a nexus, as an upstream inflow.
 
 ## Forcing: AORC
 
-All models use one weather source. NOAA's Analysis of Record for Calibration (AORC) is the natural pick: hourly, about
+All models use one weather source. Built now: a user can take its hourly weather from a NextGen run's own forcing
+(`forcing.py`, `forcing = {source = "nextgen", catchment = "cat-…"}`). That is temperature, and relative humidity from
+specific humidity, temperature and pressure (Bolton 1980), for the user's catchment. So the campus and NextGen see the
+same hours. For SWAT+ examples, NOAA's Analysis of Record for Calibration (AORC) is the natural pick: hourly, about
 1 km, 1979 onward, the forcing NextGen and the National Water Model are calibrated with, and open on AWS. It is
 chosen for this engine on its own merits, independently of Water Ledger's weather (ERA5).
 
@@ -441,10 +473,13 @@ design.
   - The adjustable parameters are those the feedback touches: streambed conductance, aquifer hydraulic conductivity
     and specific yield near streams, and SWAT+'s percolation and channel parameters.
   - IES gives an ensemble, so results can carry its spread.
-- **Shared machines:** calibration runs are parallel, and are held to the cores Andrew allows.
+- **Shared machines:** calibration runs are parallel, and are held to the cores that are free.
 
 **The record.** Each example keeps `calibration/` beside its config, named in `basin.toml` as
-`[calibration] record = "calibration/record.toml"`:
+`[calibration] record = "calibration/record.toml"`. A record gives a status per model (`[models.nextgen]`,
+`[models.modflow6]`, ...) with what it was calibrated to (`target`). An example is calibrated only if every hydrologic
+model it runs is. Water users' settings come from assumptions or applicant data and are reported as such, never as
+calibrated. The record holds:
 
 - `record.toml`:
   - status (`calibrated` or `screening`) and the date;
@@ -490,17 +525,26 @@ libmf6 lives in the driver's process. A branch would need MODFLOW 6 restarted fr
   one edge, and a synthetic user pumps one well. `surface.toml` adds a river user, a utility and rules. `two_way.toml`
   couples Osu_1hru both ways with a 10 ha aquifer. It exists for the tests and the notebook. Its places and numbers
   mean nothing.
-- **Plaster Creek** (`examples/plaster-creek`, planned): Plaster Creek in Kent County, Michigan, with a data center
-  campus.
-  - **Models:** SWAT+ on the hydrofabric catchments; MODFLOW 6 cut from a regional model; `CoolingWaterBmi` for the
-    campus; the utility chain for its supply.
+- **Plaster Creek** (`examples/plaster-creek`, built): Plaster Creek above USGS 04119055 in Kent County, Michigan.
+  - **Built:**
+    - nextgen-michigan's calibrated NextGen run (16 catchments, hydrofabric v2.2, two-stage calibration), replayed;
+    - an assumed 300 MW campus on utility water from outside the basin, stepped by `CoolingWaterBmi` on the run's own
+      forcing.
+  - **Calibration status:** streamflow at the gage is calibrated, and the record carries both nextgen-michigan's
+    published fit and Basin Ledger's recomputation of it. A test checks the two agree with the record. Low flow is
+    approximate (7-day lows 8–18% below observed in 2020–2022), and the calibration is for the gage, not the ungaged
+    headwaters.
+  - **Next:**
+    - replaying nextgen-michigan's scenario runs (users on wells and on the creek, inside NextGen) against the
+      baseline;
+    - SWAT+ on the same catchments for water quality;
+    - MODFLOW 6 cut from a regional model.
   - **The groundwater model's starting point:** USGS's regional Lake Michigan Basin model (Feinstein et al., 2010) is
     SEAWAT-2000/MODFLOW-2000, 20 layers with about 1.5 km inner cells. The MODFLOW-NWT inset models derived from it
     are archived (doi:10.5066/F76D5R5V). Either can be converted to MODFLOW 6 with flopy and refined around the basin.
     The model's own files for 2010 weren't found in a data release; this needs checking with USGS.
-  - **Calibration data:** USGS streamflow on Plaster Creek (gage to be confirmed) and Michigan well records. The
-    Plaster Creek TMDL record (E. coli, sediment and biota) gives water quality. Until its record says
-    `calibrated`, its results are a screening run.
+  - **Calibration data for what's next:** Michigan well records for groundwater, and the Plaster Creek TMDL record
+    (E. coli, sediment and biota) for water quality. Until those models are calibrated, they are screening.
 - **Private studies** live in the private `northline` repository (`studies/<name>/`), never here. A study:
   - depends on `basinledger` at a pinned version;
   - follows the example layout (`basin.toml`, `fetch.py`, `maps/`, `calibration/`, a write-up), with client data in
@@ -537,7 +581,8 @@ Next:
 5. Applying calibration parameters (SWAT+ `calibration.cal`, MODFLOW 6 arrays with pyEMU), PEST++ IES files, USGS
    observations.
 6. AORC forcing for SWAT+ and the users; the SWAT+ project builder on the hydrofabric, with outputs at every nexus.
-7. Plaster Creek as the first public example, calibrated.
+7. Plaster Creek: replay nextgen-michigan's scenario runs; rerun NextGen with CFE's percolation in its outputs for
+   MODFLOW 6; then SWAT+ on the same catchments for water quality.
 
 ## References
 
@@ -550,6 +595,8 @@ Next:
 - Hughes, J.D., Russcher, M.J., Langevin, C.D., Morway, E.D., McDonald, R.R., 2022. The MODFLOW Application Programming
   Interface for simulation control and software interoperability. Environ. Model. Softw. 148, 105257.
   https://doi.org/10.1016/j.envsoft.2021.105257
+- Bolton, D., 1980. The computation of equivalent potential temperature. Mon. Weather Rev. 108, 1046–1053.
+  https://doi.org/10.1175/1520-0493(1980)108<1046:TCOEPT>2.0.CO;2
 - Moriasi, D.N., Gitau, M.W., Pai, N., Daggupati, P., 2015. Hydrologic and water quality models: performance measures
   and evaluation criteria. Trans. ASABE 58(6), 1763–1785. https://doi.org/10.13031/trans.58.10715
 - Sommerlot, A., 2026. swatplus-bmi: run SWAT+ one day at a time through BMI. Zenodo.
