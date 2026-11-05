@@ -1,0 +1,71 @@
+name = "synthetic-surface"
+description = """The synthetic example with surface routes, a utility and rules. A mill takes water from Osu_1hru's
+channel and returns to it; it is curtailed the day after low flow. The plant is on a water system, which pumps a
+well and discharges its treated wastewater to the channel; the plant runs dry the day after low flow, and its
+withdrawal is capped when the well's head is low. For the engine's tests only."""
+
+[run]
+folder = "../../runs/synthetic-surface"
+
+[swatplus]
+project = "{swatplus_refdata}/Osu_1hru"
+places_of_use = [{name = "mill_intake", channel = "cha01"}]
+point_sources = [{name = "mill_outfall", channel = "cha01"}, {name = "wwtp", channel = "cha01"}]
+
+[modflow6]
+builder = "model:build"
+
+[recharge]
+map = "all:aqu001"
+
+[[wells]]
+name = "pw1"
+cell = [0, 20, 28]
+
+[[utilities]]
+name = "city"
+sources = [{route = "well:pw1", share = 1.0}]
+losses = 0.10
+demand = 0.002            # m3 s-1, existing customers
+sewered = 0.8
+infiltration = 0.0001     # m3 s-1
+outfall = "swat:point_source:wwtp"
+
+[[users]]
+name = "plant"
+component = "basinledger.testing:SyntheticUser"
+config = "user.toml"
+withdrawal = "utility:city"
+return = "utility:city"
+
+[[users]]
+name = "mill"
+component = "basinledger.testing:SyntheticUser"
+config = "mill.toml"
+withdrawal = "swat:place_of_use:mill_intake"
+return = "swat:point_source:mill_outfall"
+
+[[rules]]
+name = "mill low-flow cut"
+kind = "curtailment"
+user = "mill"
+channel = "cha01"
+threshold = 0.004         # m3 s-1, yesterday's outflow
+
+[[rules]]
+name = "plant dry on low flow"
+kind = "dry_mode"
+user = "plant"
+channel = "cha01"
+threshold = 0.0035
+
+[[rules]]
+name = "plant well limit"
+kind = "drawdown_limit"
+user = "plant"
+cell = [0, 20, 28]
+head_min = 88.3           # m
+limit = 0.002             # m3 s-1
+
+[outputs]
+heads = [{name = "pw1", cell = [0, 20, 28]}]
