@@ -430,6 +430,51 @@ The ledger enters, every day, each transfer as sent and as received, plus each c
     consumption + transfers out of the basin;
   - the same for each constituent's mass, from SWAT+'s and MODFLOW 6's own budgets plus the ledger.
 
+## Conservation across links (Andrew, Nov 6, 2026; written before the fixes)
+
+The models must never fight. Water may enter from outside (a supply, recharge where no surface model runs, a fixed
+head), but every crossing of a model boundary is an account in the ledger, and no link makes or loses water. Sent =
+received is necessary, not sufficient: the Clam's first coupled run (clam-basin-study, stage 3) balanced every pair
+and still had four leaks, each of which the pairs hid:
+
+| Leak | Size at the Clam | Why the pairs passed |
+|---|---|---|
+| Recharge mapped onto more area than the surface model makes it on (lakes in the catchments; a catchment outside SWAT+ given the mean rate) | 28 million m3, 9% of recharge | "sent" was figured on the mapped area, not SWAT+'s |
+| Losing reaches taking water the channel didn't have (headwater channels left nearly dry once SWAT+'s aquifers pass recharge through) | 84 million m3, 30% of recharge | booked as a shortfall, while MODFLOW 6 kept the water |
+| A starting state not consistent with the coupling (a steady state solved with every reach able to lose) | 49 million m3 of storage drained | storage is inside MODFLOW 6's budget, not a link |
+| River cells outside the coupled channels at a fixed stage | an unlimited source or sink | not mapped, so not in the ledger |
+
+Rules, each to be built and tested:
+
+1. **One owner per process.** Each flux is computed by one model. The other models' copy of it is switched off or
+   masked: set through BMI each day to the owner's value or to zero (swatplus-bmi's settable inputs, as the soil
+   temperature in clam-basin-study). SWAT+'s aquifer return flow, revap and deep recharge are MODFLOW 6's once it is
+   coupled; channel transmission loss is the river exchange's. Masking through BMI is preferred to editing inputs,
+   because a later input (`calibration.cal`) can undo an edit.
+2. **Recharge conserves the surface model's volume.** A recharge map's area per object equals the object's area in the
+   source model (the area check is on by default). Area a map can't place is booked as unmapped recharge.
+3. **Water from outside is its own account.** Recharge on cells no surface model covers, fixed heads, general heads,
+   and boundary cells not coupled to a channel are read each day and booked as boundary flows in and out.
+4. **An exchange is limited by what the giver has.** A losing reach can't take more than its channel carries that
+   day. The day's river stage is lowered, smoothly, until the predicted loss at the day's starting heads fits the
+   channel's flow. What still can't be supplied after the solve stays a shortfall, and should be small.
+5. **Seepage reaches the streams.** Drains (seepage at land surface) are coupled to channels like rivers.
+6. **The start is consistent with the coupling.** A run starts from heads spun up under the coupled rules, and the
+   ledger reports the change in groundwater storage over the run, so a drifting start shows.
+7. **Each model is checked for the settings coupling needs, at start-up.** Below.
+8. **The whole basin closes** (see Balances), from each model's own budget plus the ledger.
+
+Settings the coupling needs, checked when a run starts:
+
+- **SWAT+, two-way:** aquifers pass recharge through (no return flow, revap or deep recharge), and nothing in
+  `calibration.cal` turns them back on; channel transmission loss (`k` in `hyd-sed-lte.cha`) is zero, since in
+  two-way mode the loss is MODFLOW 6's and SWAT+'s own seepage would go to an aquifer that passes nothing on; daily
+  time step.
+- **MODFLOW 6:** a one-day time step; a recharge package Basin Ledger sets has one entry per cell and no auxiliary
+  multiplier (an entry's rate is its cell's rate); river and drain entries a map couples are one per cell; packages
+  not coupled are reported as boundary flows.
+- **Water users (Water Ledger's models):** to be listed with the first coupled user in a real example.
+
 ## Calibration
 
 Using Basin Ledger depends on calibrated models. Calibration is part of every example, not something a study adds
