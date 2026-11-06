@@ -143,9 +143,12 @@ class Basin:
             aquifers = self.sw.names("soil_water_table__recharge_rate")
             self.map = self._area_map(cfg.recharge_map, aquifers)
             areas = S.aquifer_areas(swat_dir) if swat_dir else self.swat.areas
-            self.map.check(self.mf6.cell_area, np.array([areas[a] for a in aquifers]), cfg.area_rtol)
-            self.recharge = RechargeLink(self.swat, self.mf6, self.map, cfg.recharge_package)
+            source = np.array([areas[a] for a in aquifers])
+            self.map.check(self.mf6.cell_area, source, cfg.area_rtol)
+            self.recharge = RechargeLink(self.swat, self.mf6, self.map, cfg.recharge_package, source)
             L.pair("recharge:sent", "recharge:received")
+            # what the surface model made, and what the map added to it (+) or couldn't place (-): water from outside
+            L.pair("recharge:sent", ["recharge:made", "recharge:by_the_map"])
         wells = {w.name: (w.package, self.mf6.node(*w.cell)) for w in cfg.wells}
         self.router = Router(self.sw, self.mf6, wells, L)
 
@@ -377,7 +380,10 @@ class Basin:
             if cmap.channels != list(self.due):
                 raise ValueError(f"exchange map channels {cmap.channels} differ from {list(self.due)}")
             self.exchange = StreamExchange(self.mf6, ex.get("package", "riv"), cmap)
-        L.enter("recharge:sent", self.recharge.transfer())
+        sent = self.recharge.transfer()
+        L.enter("recharge:sent", sent)
+        L.enter("recharge:made", self.recharge.made)
+        L.enter("recharge:by_the_map", sent - self.recharge.made)
         rt.apply_wells()
         if self.cfg.rivers:
             self._rivers_day()

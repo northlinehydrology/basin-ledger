@@ -159,5 +159,23 @@ def test_the_limit_removes_the_shortfall(swatplus):
         b.finalize()
         out[limit] = (-t["exchange:cha01:shortfall"].sum(), t["exchange:cha01:stage_lowered_m"] if limit else None)
     assert out[False][0] > 100.0  # m3: the synthetic example's losing days
-    assert out[True][0] < 0.1 * out[False][0]
+    # what remains is the lag: today's loss is set against today's flow and taken from tomorrow's
+    assert out[True][0] < 0.5 * out[False][0]
     assert (out[True][1] > 0).any()
+
+
+def test_recharge_made_is_recharge_sent(two_way):
+    """The two-way grid is exactly the aquifer's area: the map adds nothing and places everything."""
+    t = two_way["table"]
+    np.testing.assert_allclose(t["recharge:made"], t["recharge:sent"], rtol=1e-9, atol=1e-9)
+    assert np.abs(t["recharge:by_the_map"]).max() < 1e-6
+
+
+def test_the_area_check_is_on_by_default(swatplus):
+    """A map whose area isn't the aquifer's stops the run unless the example turns the check off."""
+    cfg = C.load(ROOT / "examples" / "synthetic" / "basin.toml")
+    cfg.run_folder = RUNS
+    assert cfg.area_rtol is None  # basin.toml spreads the aquifer over the whole grid on purpose
+    cfg.area_rtol = 1e-6
+    with pytest.raises(ValueError, match="mapped area"):
+        Basin(cfg, run="area-check", days=1)

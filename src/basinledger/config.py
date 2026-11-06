@@ -27,7 +27,8 @@ Paths are relative to the config file. ``{swatplus_refdata}`` stands for the exa
     [recharge]                          # SWAT+ aquifers -> MODFLOW 6 recharge (one-way)
     package = "rch"
     map = "all:aqu001"                  # every top-layer cell to one aquifer, or a CSV (see mapping.py)
-    area_rtol = 0.001                   # optional: mapped area must match SWAT+'s aquifer area
+    area_rtol = 1e-6                    # mapped area must match each object's area in the surface model (default 1e-6);
+    area_check = false                  #   or no check, where an example maps more or less area on purpose (say why)
 
     [[wells]]
     name = "pw1"
@@ -215,7 +216,7 @@ def load(path: str | Path) -> ExampleConfig:
         mf6_model=mf.get("model", "gwf"),
         recharge_package=rch.get("package", "rch"),
         recharge_map=rch.get("map", ""),
-        area_rtol=rch.get("area_rtol"),
+        area_rtol=None if rch.get("area_check", True) is False else float(rch.get("area_rtol", 1e-6)),
         wells=[WellConfig(w["name"], w.get("package", "wel"), tuple(w["cell"])) for w in c.get("wells", [])],
         users=users,
         calibration_record=_path(base, c["calibration"]["record"]) if c.get("calibration", {}).get("record") else None,

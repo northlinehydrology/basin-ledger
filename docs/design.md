@@ -389,10 +389,11 @@ exchange replaces SWAT+'s aquifer return flow.
   is predicted at its stages and the day's starting heads. Where it is more than the channel carries that day, the
   channel's stages are lowered by one depth, no entry below its bottom, until it fits (`limit_to_supply`). The
   ledger records the depth (`exchange:<channel>:stage_lowered_m`).
-- **Shortfalls.** What the channel still can't supply after the solve (the heads move during it) is entered in the
-  ledger: water MODFLOW 6 took from a stream that, in SWAT+, wasn't there. In the synthetic two-way example it is
-  186 m³ over three years without the limit and 4 m³ with it (stages lowered on 30 days), against about 62,000 m³ of
-  exchange.
+- **Shortfalls.** What the channel still can't supply is entered in the ledger: water MODFLOW 6 took from a stream
+  that, in SWAT+, wasn't there. Most of what remains is the lag: today's loss is set against today's flow but taken
+  from tomorrow's, which is lower in a recession; the heads also move during the solve. In the synthetic two-way
+  example the shortfall is 186 m³ over three years without the limit and 72 m³ with it, against about 62,000 m³ of
+  exchange (0.1%). Each day is lowered from its own stage, so a run restarted from a saved day matches.
 - **Stage.** With `[rivers] stage = "surface_depth"`, MODFLOW 6's river stage on day *d* is the river bottom plus
   the bed thickness plus SWAT+'s channel depth for day *d* (`channel_water__depth`, on SWAT+'s rating curve,
   swatplus-bmi 0.2.0). Otherwise it is fixed in the input. Under a NextGen replay the same setting uses t-route's
