@@ -39,12 +39,27 @@ class RechargeLink:
         Returns the volume sent, m3."""
         self.swat.get_value(RECHARGE, self._buf)
         rate = self._buf.astype(np.float64) * DAY  # m d-1 per aquifer
-        unmapped = np.setdiff1d(np.unique(self.map.node), self.mf6.package_nodes(self.package))
-        if len(unmapped):
-            raise ValueError(f"{len(unmapped)} mapped cells have no entry in MODFLOW 6's {self.package} package")
+        if not getattr(self, "_checked", False):
+            self.check_package()
+            self._checked = True
         self.mf6.set_recharge(self.package, self.map.to_cells(rate, self.mf6.cell_area))
         self.made = float(np.sum(rate * self.source_area))  # what the surface model made, one day
         return self.map.volume(rate)  # one day
+
+    def check_package(self):
+        """The recharge package Basin Ledger sets must give each cell one entry with no auxiliary multiplier: an
+        entry's rate is its cell's rate, so a second entry or a multiplier would change the volume sent."""
+        nodes = self.mf6.package_nodes(self.package)
+        unmapped = np.setdiff1d(np.unique(self.map.node), nodes)
+        nodes = nodes[nodes >= 0]  # array recharge (RCHA) lists inactive columns as node 0
+        if len(unmapped):
+            raise ValueError(f"{len(unmapped)} mapped cells have no entry in MODFLOW 6's {self.package} package")
+        if len(np.unique(nodes)) != len(nodes):
+            raise ValueError(f"MODFLOW 6's {self.package} package has {len(nodes) - len(np.unique(nodes))} cells with "
+                             "more than one entry; Basin Ledger sets one rate per cell")
+        if int(self.mf6.get("IAUXMULTCOL", self.mf6.model, self.package.upper())[0]) > 0:
+            raise ValueError(f"MODFLOW 6's {self.package} package has an auxiliary multiplier; Basin Ledger sets "
+                             "the rate itself")
 
     def received(self) -> float:
         """Volume the recharge package took in on the day just solved, m3."""

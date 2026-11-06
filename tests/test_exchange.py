@@ -192,3 +192,18 @@ def test_no_water_from_outside_in_the_two_way_example(two_way):
     wells = [k for k in t if k.startswith("route:well:") and k.endswith(":delivered")]
     assert wells
     np.testing.assert_allclose(links - sum(t[k] for k in wells), 0.0, atol=1e-6 * np.abs(t["recharge:received"]).max())
+
+
+def test_swat_settings_that_would_fight_are_refused(tmp_path, swatplus):
+    import shutil
+    d = tmp_path / "p"
+    shutil.copytree(swatplus / "Osu_1hru", d)
+    S.aquifer_pass_through(d)
+    assert any("transmission loss" in p for p in S.coupling_problems(d, two_way=True))  # Osu_1hru's channels lose
+    S.no_transmission_loss(d)
+    assert S.coupling_problems(d, two_way=True) == []
+    (d / "file.cio").write_text((d / "file.cio").read_text().replace("cal_parms.cal     null",
+                                                                       "cal_parms.cal     calibration.cal"))
+    (d / "calibration.cal").write_text("calibration.cal\n 1\n NAME CHG_TYP VAL\nflo_min absval 5.0 0 0 0 0 0 0 0 0\n")
+    assert any("flo_min" in p for p in S.coupling_problems(d, two_way=True))
+    assert S.coupling_problems(d, two_way=False) == []

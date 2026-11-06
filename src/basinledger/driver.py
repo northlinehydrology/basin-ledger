@@ -84,8 +84,12 @@ class Basin:
                 S.add_point_sources(swat_dir, points)
             if ex:
                 S.aquifer_pass_through(swat_dir)
+                S.no_transmission_loss(swat_dir)
             if prepare:
                 prepare("swatplus", swat_dir)
+            problems = S.coupling_problems(swat_dir, two_way=bool(ex))
+            if problems:
+                raise ValueError("SWAT+ isn't set up to be coupled:\n- " + "\n- ".join(problems))
             self.swat = SwatPlusBmi()
             self.swat.initialize(str(swat_dir))
         else:

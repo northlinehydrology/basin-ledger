@@ -472,15 +472,18 @@ Rules, each to be built and tested:
 5. **Seepage reaches the streams.** Drains (seepage at land surface) are coupled to channels like rivers.
 6. **The start is consistent with the coupling.** A run starts from heads spun up under the coupled rules, and the
    ledger reports the change in groundwater storage over the run, so a drifting start shows.
-7. **Each model is checked for the settings coupling needs, at start-up.** Below.
+7. **Each model is checked for the settings coupling needs, at start-up (built Nov 6, 2026).** Below; a run with a
+   wrong setting stops before its first day.
 8. **The whole basin closes** (see Balances), from each model's own budget plus the ledger.
 
 Settings the coupling needs, checked when a run starts:
 
 - **SWAT+, two-way:** aquifers pass recharge through (no return flow, revap or deep recharge), and nothing in
-  `calibration.cal` turns them back on; channel transmission loss (`k` in `hyd-sed-lte.cha`) is zero, since in
-  two-way mode the loss is MODFLOW 6's and SWAT+'s own seepage would go to an aquifer that passes nothing on; daily
-  time step.
+  `calibration.cal` turns them back on (`flo_min`, `revap_min`, `rchg_dp`, `chk`); channel transmission loss (`k`
+  in `hyd-sed-lte.cha`) is zero. SWAT+ 62.0.1 (`ch_rtmusk.f90`) takes that loss out of the channel, records it as
+  `seep` and sends it nowhere, so in two-way mode it would leave the basin unbooked; Basin Ledger sets it to zero
+  in the run's copy, as it does the aquifers (`no_transmission_loss`). Osu_1hru's channels had it on, so the
+  synthetic two-way example lost water this way until Nov 6, 2026. Daily time step (`time.sim` step 0).
 - **MODFLOW 6:** a one-day time step; a recharge package Basin Ledger sets has one entry per cell and no auxiliary
   multiplier (an entry's rate is its cell's rate); river and drain entries a map couples are one per cell; packages
   not coupled are reported as boundary flows.
