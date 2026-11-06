@@ -456,13 +456,19 @@ Rules, each to be built and tested:
    temperature in clam-basin-study). SWAT+'s aquifer return flow, revap and deep recharge are MODFLOW 6's once it is
    coupled; channel transmission loss is the river exchange's. Masking through BMI is preferred to editing inputs,
    because a later input (`calibration.cal`) can undo an edit.
-2. **Recharge conserves the surface model's volume.** A recharge map's area per object equals the object's area in the
-   source model (the area check is on by default). Area a map can't place is booked as unmapped recharge.
-3. **Water from outside is its own account.** Recharge on cells no surface model covers, fixed heads, general heads,
-   and boundary cells not coupled to a channel are read each day and booked as boundary flows in and out.
-4. **An exchange is limited by what the giver has.** A losing reach can't take more than its channel carries that
-   day. The day's river stage is lowered, smoothly, until the predicted loss at the day's starting heads fits the
-   channel's flow. What still can't be supplied after the solve stays a shortfall, and should be small.
+2. **Recharge conserves the surface model's volume (built Nov 6, 2026).** A recharge map's area per object equals the
+   object's area in the source model: the area check is on by default (`area_rtol`, 1e-6), and an example that maps
+   more or less on purpose turns it off and says why. What the surface model made is booked beside what was sent;
+   the difference (`recharge:by_the_map`) is water the map added or couldn't place.
+3. **Water from outside is its own account (built Nov 6, 2026).** Each day, every MODFLOW 6 package's flow on entries
+   no link carries (fixed or general heads, drains and rivers not coupled, recharge packages Basin Ledger doesn't
+   set, wells not in the config) is booked as `groundwater:boundary:<package>`, positive into the aquifer. The
+   release from storage (STRGSS + STRGSY) is `groundwater:storage_release`, and the model's closure against the
+   day's gross flow (`groundwater:closure_share`) must be within 1e-6 every day.
+4. **An exchange is limited by what the giver has (built Nov 6, 2026).** A losing reach can't take more than its
+   channel carries that day. The day's river stage is lowered, smoothly, until the predicted loss at the day's
+   starting heads fits the channel's flow. What still can't be supplied after the solve stays a shortfall, and should
+   be small (see The MODFLOW 6 coupling).
 5. **Seepage reaches the streams.** Drains (seepage at land surface) are coupled to channels like rivers.
 6. **The start is consistent with the coupling.** A run starts from heads spun up under the coupled rules, and the
    ledger reports the change in groundwater storage over the run, so a drifting start shows.

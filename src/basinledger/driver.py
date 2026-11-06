@@ -400,6 +400,47 @@ class Basin:
         if self.cfg.exchange:
             self._enter_exchange(L)
             L.enter("swatplus:aquifer_outflow", float(self.sw.get(S.AQU_OUT).sum()) * DAY)
+        self._groundwater_accounts(L)
+
+    def _groundwater_accounts(self, L):
+        """Every flow in or out of the groundwater model that no link carries, by package (water from or to outside
+        the coupled models: fixed or general heads, drains and rivers not coupled, recharge packages Basin Ledger
+        doesn't set), the release from storage, and the model's closure, all in m3 for the day. Positive is into
+        the aquifer. The closure is checked every day, against the day's gross flow."""
+        mf = self.mf6
+        if not hasattr(self, "_gw_packages"):
+            prefix = mf.model.upper() + "/"
+            names = set(mf.api.get_input_var_names()) | set(mf.api.get_output_var_names())
+            pkgs = sorted({n.split("/")[1] for n in names if n.startswith(prefix) and n.endswith("/SIMVALS")})
+            coupled = {}
+            for p in pkgs:
+                n = mf.nbound(p)
+                m = np.zeros(n, bool)
+                if p == self.cfg.recharge_package.upper():
+                    m[:] = True
+                if self.exchange is not None and p == self.exchange.package.upper():
+                    m |= self.exchange.map.entry_channel[:n] >= 0
+                for w in self.cfg.wells:
+                    if w.package.upper() == p:
+                        m[mf.entry(p, mf.node(*w.cell))] = True
+                coupled[p] = m
+            self._gw_packages = coupled
+            L.zero("groundwater:closure_share", atol=1e-6)
+        net = gross = 0.0
+        for p, m in self._gw_packages.items():
+            q = mf.simvals(p)
+            L.enter(f"groundwater:boundary:{p.lower()}", float(q[~m[: len(q)]].sum()))
+            net += float(q.sum())
+            gross += float(np.abs(q).sum())
+        sto = 0.0
+        for v in ("STRGSS", "STRGSY"):
+            try:
+                x = mf.get(v, mf.model, "STO")
+            except Exception:
+                continue
+            sto += float(np.sum(x))
+        L.enter("groundwater:storage_release", sto)  # MODFLOW 6's STRGSS + STRGSY: positive is released into the flow
+        L.enter("groundwater:closure_share", (net + sto) / max(gross + abs(sto), 1e-30))
 
     def _enter_exchange(self, L):
         """Today's SWAT+ side of yesterday's exchange, then today's MODFLOW 6 exchange as tomorrow's due."""

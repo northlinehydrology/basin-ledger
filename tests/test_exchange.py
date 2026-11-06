@@ -179,3 +179,16 @@ def test_the_area_check_is_on_by_default(swatplus):
     cfg.area_rtol = 1e-6
     with pytest.raises(ValueError, match="mapped area"):
         Basin(cfg, run="area-check", days=1)
+
+
+def test_no_water_from_outside_in_the_two_way_example(two_way):
+    """Every MODFLOW 6 flow in the two-way example is a link (recharge, the well, the exchange), so the boundary
+    accounts are zero, and the aquifer's storage closes with the links."""
+    t = two_way["table"]
+    for k in [k for k in t if k.startswith("groundwater:boundary:")]:
+        assert np.abs(t[k]).max() < 1e-9, k
+    assert np.abs(t["groundwater:closure_share"]).max() < 1e-6
+    links = t["recharge:received"] - t["exchange:cha01:to_stream"] + t["groundwater:storage_release"]
+    wells = [k for k in t if k.startswith("route:well:") and k.endswith(":delivered")]
+    assert wells
+    np.testing.assert_allclose(links - sum(t[k] for k in wells), 0.0, atol=1e-6 * np.abs(t["recharge:received"]).max())
