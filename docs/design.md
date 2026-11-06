@@ -472,8 +472,10 @@ Rules, each to be built and tested:
 5. **Seepage reaches the streams (built Nov 6, 2026).** Drains (seepage at land surface) are coupled to channels
    like the rivers' gains (`[exchange] drains`): their discharge joins the channel's exchange the next day and is
    booked as `exchange:<channel>:seepage`. Without it a drain is a boundary flow, water leaving the basin.
-6. **The start is consistent with the coupling.** A run starts from heads spun up under the coupled rules, and the
-   ledger reports the change in groundwater storage over the run, so a drifting start shows.
+6. **The start is consistent with the coupling (built Nov 6, 2026).** `Basin.spin_up` runs the first year again and
+   again, SWAT+ from its own start and MODFLOW 6 from the heads the last cycle ended with, until the year's net
+   release from storage is within a tolerance of its recharge; `Basin(..., heads=...)` starts the run there. The
+   ledger's `groundwater:storage_release` shows any drift that remains.
 7. **Each model is checked for the settings coupling needs, at start-up (built Nov 6, 2026).** Below; a run with a
    wrong setting stops before its first day.
 8. **The whole basin closes** (see Balances), from each model's own budget plus the ledger.

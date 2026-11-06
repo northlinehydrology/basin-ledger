@@ -54,9 +54,10 @@ def _example_function(cfg: C.ExampleConfig, spec: str, default: str):
 
 class Basin:
     def __init__(self, cfg: C.ExampleConfig, run: str = "base", users: bool = True, days: int | None = None,
-                 restart: str | Path | None = None, prepare=None):
+                 restart: str | Path | None = None, prepare=None, heads: np.ndarray | None = None):
         """``prepare(model, folder)``, if given, is called on the run's copy of each model's files ("swatplus",
-        "modflow6") before that model starts: where a calibration writes a parameter set."""
+        "modflow6") before that model starts: where a calibration writes a parameter set. ``heads``: MODFLOW 6's
+        starting heads (per reduced node), in place of its input's, as from ``spin_up``."""
         self.cfg = cfg
         self.status = cfg.calibration_status  # 'screening' unless the example's record says 'calibrated'
         self.folder = cfg.run_folder / run
@@ -129,6 +130,8 @@ class Basin:
             self.mf6 = Modflow6(ws, cfg.mf6_model)
             if saved:
                 self.mf6.set_heads(np.load(Path(restart) / "heads.npy"))
+            elif heads is not None:
+                self.mf6.set_heads(np.asarray(heads, float))
             if self.mf6.end < self.days - self.day - 1e-9:
                 raise ValueError(f"MODFLOW 6 simulation is {self.mf6.end} days; the run needs {self.days - self.day}")
         elif cfg.wells or ex or cfg.outputs.get("heads") or cfg.rivers:
@@ -455,7 +458,8 @@ class Basin:
                 continue
             sto += float(np.sum(x))
         L.enter("groundwater:storage_release", sto)  # MODFLOW 6's STRGSS + STRGSY: positive is released into the flow
-        L.enter("groundwater:closure_share", (net + sto) / max(gross + abs(sto), 1e-30))
+        # against the day's gross flow, with a floor of 1 m3 so a day with almost no flow isn't noise over noise
+        L.enter("groundwater:closure_share", (net + sto) / max(gross + abs(sto), 1.0))
 
     def _enter_exchange(self, L):
         """Today's SWAT+ side of yesterday's exchange, then today's MODFLOW 6 exchange as tomorrow's due."""
@@ -541,6 +545,30 @@ class Basin:
         if self.mf6 is not None:
             self.mf6.finalize()
         self.swat.finalize()
+
+    @classmethod
+    def spin_up(cls, cfg: C.ExampleConfig, days: int = 365, cycles: int = 5, tol: float = 0.01, run: str = "spinup",
+                users: bool = False, prepare=None, heads: np.ndarray | None = None) -> tuple[np.ndarray, list[dict]]:
+        """MODFLOW 6's starting heads under the coupling: the first ``days`` run again and again, SWAT+ from its own
+        start each time and MODFLOW 6 from the heads the last cycle ended with, until the cycle's net release from
+        storage is within ``tol`` of the recharge it received (or ``cycles`` run). A start that isn't consistent with
+        the coupling drains or fills storage over the run (the Clam's first coupled run drained 49 million m3,
+        15% of its recharge). Returns the heads and each cycle's storage release and recharge, m3."""
+        report = []
+        for i in range(cycles):
+            b = cls(cfg, run=f"{run}-{i}", users=users, days=days, prepare=prepare, heads=heads)
+            try:
+                b.run()
+                t = b.ledger.totals()
+                heads = b.mf6.head()
+            finally:
+                b.finalize()
+            rel, rch = t.get("groundwater:storage_release", 0.0), t.get("recharge:received", 0.0)
+            report.append({"cycle": i, "storage_release_m3": rel, "recharge_m3": rch,
+                           "share": rel / rch if rch else float("nan")})
+            if rch and abs(rel / rch) < tol:
+                break
+        return heads, report
 
     @classmethod
     def from_config(cls, path, run: str = "base", users: bool = True, days: int | None = None,

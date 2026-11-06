@@ -226,3 +226,16 @@ def test_drains_reach_the_stream(swatplus):
     assert np.abs(t["groundwater:boundary:drn"]).max() < 1e-9
     assert np.abs(t["groundwater:closure_share"]).max() < 1e-6
     np.testing.assert_allclose(t["exchange:cha01:due"][1:], t["exchange:cha01:to_stream"][:-1], rtol=0)
+
+
+def test_spin_up_settles_storage(swatplus):
+    """Cycling the first year from the last cycle's heads brings the year's release from storage toward zero, and a
+    run from those heads starts where the spin-up ended."""
+    cfg = C.load(ROOT / "examples" / "synthetic" / "two_way.toml")
+    cfg.run_folder = RUNS
+    heads, report = Basin.spin_up(cfg, days=365, cycles=4, tol=1e-4, run="two-way-spinup")
+    shares = [abs(r["share"]) for r in report]
+    assert len(report) >= 2 and shares[-1] < shares[0]
+    b = Basin(cfg, run="two-way-spun", days=2, heads=heads)
+    np.testing.assert_array_equal(b.mf6.head(), heads)
+    b.finalize()
