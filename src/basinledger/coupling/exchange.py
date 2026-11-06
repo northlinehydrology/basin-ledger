@@ -16,12 +16,18 @@ SWAT+'s own aquifers are set to pass recharge through (``swatplus.aquifer_pass_t
 deep recharge), so groundwater reaches the streams once, through MODFLOW 6. The ledger holds SWAT+'s aquifer outflow
 at zero every day.
 
-Limits of this first version:
+**Limited by supply** (``[exchange] limit``, on by default): a losing reach can't take more than its channel carries
+that day. Before the solve, each coupled channel's loss is predicted at its entries' stages and the day's starting
+heads. Where it is more than the channel's flow that day, the channel's stages are lowered by one depth, no entry
+below its bottom, until the predicted loss fits (``limit_to_supply``). Lowering the stage is the smooth form of
+the river drying: the reach loses less, and gains more where the head is above it. The heads move during the solve,
+so a small shortfall can remain; it stays in the ledger. Without the limit, the Clam's headwater channels, left
+nearly dry once SWAT+'s aquifers pass recharge through, lost 84 million m3 to MODFLOW 6 that they didn't have.
+
+Other limits of this version:
 - MODFLOW 6's river stage is fixed in its input unless the example's ``[rivers]`` section sets it from the surface
   model's channel depth (``stage = "surface_depth"``; SWAT+'s depth needs swatplus-bmi 0.2.0);
-- the lag moves water by a day but keeps its volume; the last day's exchange is reported as in transit;
-- a losing reach SWAT+ can't supply is entered as a shortfall: water MODFLOW 6 took from a stream that, in SWAT+,
-  wasn't there. The next step is to lower the reach's stage for the next day when that happens.
+- the lag moves water by a day but keeps its volume; the last day's exchange is reported as in transit.
 """
 
 from __future__ import annotations
@@ -66,6 +72,37 @@ class ChannelMap:
         return cls(chans, entry)
 
 
+def limit_to_supply(stage: np.ndarray, rbot: np.ndarray, cond: np.ndarray, head: np.ndarray, entry_channel: np.ndarray,
+                    available: np.ndarray, iterations: int = 60) -> tuple[np.ndarray, np.ndarray]:
+    """Stages lowered so that no channel's predicted loss is more than it has.
+
+    Per entry, MODFLOW 6's river package takes ``cond * (stage - max(head, rbot))`` from the river when that is
+    positive. For each channel (``entry_channel``, -1 for entries not coupled) whose total is more than
+    ``available`` (m3 for the day), its entries' stages are lowered by one depth d, ``max(stage - d, rbot)``, with d
+    found by bisection. At d = max(stage - rbot) the channel takes nothing, so a d always exists. Returns the new
+    stages and each channel's d (m, 0 where nothing was lowered)."""
+    stage = np.asarray(stage, float).copy()
+    floor = np.maximum(head, rbot)
+
+    def loss(st, sel):
+        return float(np.sum(cond[sel] * np.clip(st[sel] - floor[sel], 0.0, None)))
+
+    lowered = np.zeros(len(available))
+    for i, have in enumerate(np.maximum(available, 0.0)):
+        sel = np.flatnonzero(entry_channel == i)
+        if len(sel) == 0 or loss(stage, sel) <= have:
+            continue
+        lo, hi = 0.0, float(np.max(stage[sel] - rbot[sel]))
+        s0 = stage.copy()
+        for _ in range(iterations):
+            mid = 0.5 * (lo + hi)
+            s0[sel] = np.maximum(stage[sel] - mid, rbot[sel])
+            lo, hi = (lo, mid) if loss(s0, sel) <= have else (mid, hi)
+        stage[sel] = np.maximum(stage[sel] - hi, rbot[sel])
+        lowered[i] = hi
+    return stage, lowered
+
+
 def requests(due: dict[str, float]) -> dict[str, float]:
     """Yesterday's exchange (m3 per channel, positive to the stream) as today's SWAT+ routes."""
     out = {}
@@ -78,6 +115,22 @@ def requests(due: dict[str, float]) -> dict[str, float]:
 class StreamExchange:
     def __init__(self, mf6: Modflow6, package: str, cmap: ChannelMap):
         self.mf6, self.package, self.map = mf6, package, cmap
+        P = package.upper()
+        self._cond = mf6.get("COND", mf6.model, P).astype(float)
+        self._rbot = mf6.get("RBOT", mf6.model, P).astype(float)
+
+    def limit(self, available: dict[str, float]) -> dict[str, float]:
+        """Lower today's stages where a channel would lose more than ``available`` (m3 for the day), before the
+        solve. Returns the depth each channel was lowered by, m."""
+        n = self.mf6.nbound(self.package)
+        stage = self.mf6.get("STAGE", self.mf6.model, self.package.upper()).astype(float)
+        head = self.mf6.head()[self.mf6.package_nodes(self.package)]
+        new, d = limit_to_supply(stage[:n], self._rbot[:n], self._cond[:n], head, self.map.entry_channel[:n],
+                                 np.array([available[c] for c in self.map.channels]))
+        if np.any(d > 0):
+            stage[:n] = new
+            self.mf6.set_stage(self.package, stage)
+        return dict(zip(self.map.channels, d.tolist()))
 
     def after_solve(self) -> dict[str, float]:
         """Today's exchange per channel (m3, positive to the stream), due in SWAT+ tomorrow."""

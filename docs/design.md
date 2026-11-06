@@ -385,10 +385,14 @@ exchange replaces SWAT+'s aquifer return flow.
   SWAT+'s channel balance closes. The ledger enters what SWAT+ reports it actually exchanged.
   - Before 0.2.0, the exchange went through one point source and one water allocation place of use per channel.
   - A negative point source would not work: SWAT+ 62.0.1 records it in full even when the channel can't supply it.
-- **Shortfalls.** Where the channel can't supply a losing reach's demand, the shortfall is entered in the ledger. That
-  is water MODFLOW 6 took from a stream that, in SWAT+, wasn't there. In the synthetic two-way example it is 186 m³
-  over three years, against about 61,000 m³ of exchange. The next step is to lower the reach's stage for the next day
-  when it happens.
+- **Limited by supply (built Nov 6, 2026; `[exchange] limit`, on by default).** Before each solve, a channel's loss
+  is predicted at its stages and the day's starting heads. Where it is more than the channel carries that day, the
+  channel's stages are lowered by one depth, no entry below its bottom, until it fits (`limit_to_supply`). The
+  ledger records the depth (`exchange:<channel>:stage_lowered_m`).
+- **Shortfalls.** What the channel still can't supply after the solve (the heads move during it) is entered in the
+  ledger: water MODFLOW 6 took from a stream that, in SWAT+, wasn't there. In the synthetic two-way example it is
+  186 m³ over three years without the limit and 4 m³ with it (stages lowered on 30 days), against about 62,000 m³ of
+  exchange.
 - **Stage.** With `[rivers] stage = "surface_depth"`, MODFLOW 6's river stage on day *d* is the river bottom plus
   the bed thickness plus SWAT+'s channel depth for day *d* (`channel_water__depth`, on SWAT+'s rating curve,
   swatplus-bmi 0.2.0). Otherwise it is fixed in the input. Under a NextGen replay the same setting uses t-route's
@@ -646,7 +650,6 @@ Next:
    concentrations on users.
 3. Two-way refinements:
    - stage from SWAT+'s channel depth (asked of swatplus-bmi);
-   - lowering the stage after a shortfall;
    - SFR for routed streams;
    - leaks and infiltration in the chain exchanged with MODFLOW 6.
 4. Restarts for MODFLOW 6 models with several stress periods; scenarios in parallel processes from one saved

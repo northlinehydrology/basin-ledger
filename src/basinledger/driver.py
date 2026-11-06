@@ -381,6 +381,11 @@ class Basin:
         rt.apply_wells()
         if self.cfg.rivers:
             self._rivers_day()
+        if self.exchange is not None and self.cfg.exchange.get("limit", True):
+            # a losing reach takes no more than its channel carries today (exchange.limit_to_supply)
+            flow = dict(zip(self.sw.names(S.QOUT), self.sw.get(S.QOUT) * DAY))
+            for c, d in self.exchange.limit({c: flow[c] for c in self.due}).items():
+                L.enter(f"exchange:{c}:stage_lowered_m", d)
         self.mf6.solve_day()
         L.enter("recharge:received", self.recharge.received())
         rt.read_wells()

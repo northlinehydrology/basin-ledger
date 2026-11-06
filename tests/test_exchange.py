@@ -124,3 +124,40 @@ def test_stage_from_swat_depth(swatplus):
     np.testing.assert_allclose(st, rbot[0] + 1.0 + np.array(depths), rtol=0, atol=1e-5)
     assert np.ptp(st) > 0
     assert (t["exchange:cha01:due"] != 0).sum() > 100
+
+
+def test_limit_to_supply_fits_the_loss():
+    """The stage is lowered only where a channel would lose more than it has, never below the bottom, and then
+    loses no more than it has."""
+    from basinledger.coupling.exchange import limit_to_supply
+    stage = np.array([10.0, 10.0, 10.0, 5.0])
+    rbot = np.array([9.0, 9.0, 9.0, 4.0])
+    cond = np.array([100.0, 100.0, 100.0, 50.0])
+    head = np.array([8.0, 9.5, 11.0, 3.0])  # below the bottom, between, above (gaining); channel 2 below
+    ch = np.array([0, 0, 0, 1])
+    loss = lambda st: cond * np.clip(st - np.maximum(head, rbot), 0, None)  # noqa: E731
+    new, d = limit_to_supply(stage, rbot, cond, head, ch, np.array([60.0, 1000.0]))
+    assert loss(stage)[:3].sum() == pytest.approx(150.0)
+    assert loss(new)[:3].sum() == pytest.approx(60.0, rel=1e-9)
+    assert d[0] > 0 and d[1] == 0 and new[3] == stage[3]
+    assert (new >= rbot).all()
+    new, d = limit_to_supply(stage, rbot, cond, head, ch, np.array([0.0, 0.0]))
+    assert loss(new).sum() == pytest.approx(0.0, abs=1e-9)
+    np.testing.assert_allclose(new, rbot)
+
+
+def test_the_limit_removes_the_shortfall(swatplus):
+    """Lowering the stage where the channel can't supply the loss leaves a smaller shortfall than booking it."""
+    out = {}
+    for limit in (False, True):
+        cfg = C.load(ROOT / "examples" / "synthetic" / "two_way.toml")
+        cfg.run_folder = RUNS
+        cfg.exchange = dict(cfg.exchange, limit=limit)
+        b = Basin(cfg, run=f"two-way-limit-{limit}", days=DAYS)
+        b.run()
+        t = b.ledger.table()
+        b.finalize()
+        out[limit] = (-t["exchange:cha01:shortfall"].sum(), t["exchange:cha01:stage_lowered_m"] if limit else None)
+    assert out[False][0] > 100.0  # m3: the synthetic example's losing days
+    assert out[True][0] < 0.1 * out[False][0]
+    assert (out[True][1] > 0).any()
