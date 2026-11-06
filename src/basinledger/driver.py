@@ -232,13 +232,16 @@ class Basin:
                 wu.fast_forward(self.day)
 
     def _exchange_channels(self, ex) -> list[str]:
-        """The channels the exchange map couples, in order; needed before SWAT+ starts, for their objects."""
-        spec = ex.get("map", "")
-        if spec.startswith("all:"):
-            return [spec[4:]]
+        """The channels the exchange's rivers and drains couple, in order; needed before SWAT+ starts."""
         import csv
-        with open(self.cfg.folder / spec, newline="") as f:
-            return list(dict.fromkeys(r["object"] for r in csv.DictReader(f)))
+        out = []
+        for spec in [ex.get("map", "")] + ([ex["drains"]["map"]] if ex.get("drains") else []):
+            if spec.startswith("all:"):
+                out.append(spec[4:])
+                continue
+            with open(self.cfg.folder / spec, newline="") as f:
+                out += [r["object"] for r in csv.DictReader(f)]
+        return list(dict.fromkeys(out))
 
     def _river_objects(self, rv) -> list[str]:
         spec = rv.get("map", "")
@@ -379,11 +382,17 @@ class Basin:
         self.mf6.prepare_day()
         if self.cfg.exchange and self.exchange is None:
             ex = self.cfg.exchange
+            names = self.sw.names(S.QOUT)
             cmap = ChannelMap.from_spec(ex.get("map", ""), self.cfg.folder, self.mf6, ex.get("package", "riv"),
-                                        self.sw.names(S.QOUT))
+                                        names, channels=list(self.due))
             if cmap.channels != list(self.due):
                 raise ValueError(f"exchange map channels {cmap.channels} differ from {list(self.due)}")
-            self.exchange = StreamExchange(self.mf6, ex.get("package", "riv"), cmap)
+            drains = None
+            if ex.get("drains"):
+                dp = ex["drains"].get("package", "drn")
+                drains = (dp, ChannelMap.from_spec(ex["drains"]["map"], self.cfg.folder, self.mf6, dp, names,
+                                                   channels=list(self.due)))
+            self.exchange = StreamExchange(self.mf6, ex.get("package", "riv"), cmap, drains)
         sent = self.recharge.transfer()
         L.enter("recharge:sent", sent)
         L.enter("recharge:made", self.recharge.made)
@@ -424,6 +433,8 @@ class Basin:
                     m[:] = True
                 if self.exchange is not None and p == self.exchange.package.upper():
                     m |= self.exchange.map.entry_channel[:n] >= 0
+                if self.exchange is not None and self.exchange.drains and p == self.exchange.drains[0].upper():
+                    m |= self.exchange.drains[1].entry_channel[:n] >= 0
                 for w in self.cfg.wells:
                     if w.package.upper() == p:
                         m[mf.entry(p, mf.node(*w.cell))] = True
@@ -463,6 +474,8 @@ class Basin:
         self.due = self.exchange.after_solve()
         for c, net in self.due.items():
             L.enter(f"exchange:{c}:to_stream", net)
+            if self.exchange.drains is not None:
+                L.enter(f"exchange:{c}:seepage", self.exchange.seepage[c])  # the drains' part of to_stream
 
     def run(self, days: int | None = None):
         n = self.days - self.day if days is None else days

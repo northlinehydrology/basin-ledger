@@ -38,6 +38,8 @@ Paths are relative to the config file. ``{swatplus_refdata}`` stands for the exa
     [exchange]                          # optional: two-way stream-aquifer exchange (MODFLOW 6 RIV <-> SWAT+)
     package = "riv"
     map = "all:cha01"                   # every RIV entry to one channel, or a CSV: object, layer, row, col
+    limit = true                        # a losing reach takes no more than its channel carries (default)
+    drains = {package = "drn", map = "maps/drains.csv"}   # optional: seepage cells, to their channels the next day
 
     [rivers]                            # optional: MODFLOW 6 river cells by flowpath, for stage and base flow out
     package = "riv"

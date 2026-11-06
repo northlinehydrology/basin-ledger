@@ -49,15 +49,19 @@ class ChannelMap:
         self.entry_channel = entry_channel  # per package entry: index into channels, or -1 (not coupled)
 
     @classmethod
-    def from_spec(cls, spec: str, folder: Path, mf6: Modflow6, package: str, swat_channels: list[str]):
+    def from_spec(cls, spec: str, folder: Path, mf6: Modflow6, package: str, swat_channels: list[str],
+                  channels: list[str] | None = None):
+        """``channels``, if given, fixes the channel order (and so the indices), as when rivers and drains share
+        one list of coupled channels."""
         nodes = mf6.package_nodes(package)
         if spec.startswith("all:"):
             ch = spec[4:]
             if ch not in swat_channels:
                 raise KeyError(f"exchange map: {ch!r} is not a SWAT+ channel")
-            return cls([ch], np.zeros(len(nodes), dtype=int))
+            chans = list(channels) if channels else [ch]
+            return cls(chans, np.full(len(nodes), chans.index(ch), dtype=int))
         entry = np.full(len(nodes), -1)
-        chans: list[str] = []
+        chans: list[str] = list(channels) if channels else []
         with open(folder / spec, newline="") as f:
             for r in csv.DictReader(f):
                 ch = r["object"]
@@ -114,8 +118,15 @@ def requests(due: dict[str, float]) -> dict[str, float]:
 
 
 class StreamExchange:
-    def __init__(self, mf6: Modflow6, package: str, cmap: ChannelMap):
+    """The river package's exchange, plus any drains coupled to the same channels (``drains``: package, map).
+    Drains only take water from the aquifer (seepage at land surface) and give it to their channel the next day,
+    as the rivers' gains do."""
+
+    def __init__(self, mf6: Modflow6, package: str, cmap: ChannelMap, drains: tuple[str, ChannelMap] | None = None):
         self.mf6, self.package, self.map = mf6, package, cmap
+        self.drains = drains
+        if drains is not None and drains[1].channels != cmap.channels:
+            raise ValueError("the drains' channels must be the rivers' channels, in the same order")
         P = package.upper()
         self._cond = mf6.get("COND", mf6.model, P).astype(float)
         self._rbot = mf6.get("RBOT", mf6.model, P).astype(float)
@@ -143,7 +154,17 @@ class StreamExchange:
         return dict(zip(self.map.channels, d.tolist()))
 
     def after_solve(self) -> dict[str, float]:
-        """Today's exchange per channel (m3, positive to the stream), due in SWAT+ tomorrow."""
+        """Today's exchange per channel (m3, positive to the stream), due in SWAT+ tomorrow: the rivers' net
+        exchange plus the drains' seepage."""
         q = self.mf6.simvals(self.package)  # m3 d-1, positive into the aquifer
-        e = self.map.entry_channel
-        return {ch: -float(q[e == i].sum()) for i, ch in enumerate(self.map.channels)}
+        e = self.map.entry_channel[: len(q)]
+        out = {ch: -float(q[e == i].sum()) for i, ch in enumerate(self.map.channels)}
+        self.seepage = {ch: 0.0 for ch in out}
+        if self.drains is not None:
+            pkg, dmap = self.drains
+            qd = self.mf6.simvals(pkg)
+            ed = dmap.entry_channel[: len(qd)]
+            for i, ch in enumerate(dmap.channels):
+                self.seepage[ch] = -float(qd[ed == i].sum())
+                out[ch] += self.seepage[ch]
+        return out

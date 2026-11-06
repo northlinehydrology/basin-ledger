@@ -207,3 +207,22 @@ def test_swat_settings_that_would_fight_are_refused(tmp_path, swatplus):
     (d / "calibration.cal").write_text("calibration.cal\n 1\n NAME CHG_TYP VAL\nflo_min absval 5.0 0 0 0 0 0 0 0 0\n")
     assert any("flo_min" in p for p in S.coupling_problems(d, two_way=True))
     assert S.coupling_problems(d, two_way=False) == []
+
+
+def test_drains_reach_the_stream(swatplus):
+    """Seepage at land surface (a drain) is coupled to the channel like the river's gains: it arrives the next day,
+    the drain is no boundary flow, and the aquifer closes with the links."""
+    cfg = C.load(ROOT / "examples" / "synthetic" / "two_way.toml")
+    cfg.run_folder = RUNS
+    cfg.mf6_builder = "model:build_small"
+    cfg.mf6_builder_args = {"drain_elevation": 87.5}  # half a meter below the river's stage (88 m)
+    cfg.exchange = dict(cfg.exchange, drains={"package": "drn", "map": "all:cha01"})
+    b = Basin(cfg, run="two-way-drains", days=400)
+    b.run()
+    t = b.ledger.table()
+    b.finalize()
+    seep = t["exchange:cha01:seepage"]
+    assert (seep > 0).sum() > 50 and (seep >= -1e-9).all()
+    assert np.abs(t["groundwater:boundary:drn"]).max() < 1e-9
+    assert np.abs(t["groundwater:closure_share"]).max() < 1e-6
+    np.testing.assert_allclose(t["exchange:cha01:due"][1:], t["exchange:cha01:to_stream"][:-1], rtol=0)
