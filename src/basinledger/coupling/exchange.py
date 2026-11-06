@@ -21,7 +21,8 @@ that day. Before the solve, each coupled channel's loss is predicted at its entr
 heads. Where it is more than the channel's flow that day, the channel's stages are lowered by one depth, no entry
 below its bottom, until the predicted loss fits (``limit_to_supply``). Lowering the stage is the smooth form of
 the river drying: the reach loses less, and gains more where the head is above it. The heads move during the solve,
-so a small shortfall can remain; it stays in the ledger. Without the limit, the Clam's headwater channels, left
+and today's loss is taken from tomorrow's flow (the one-day lag), so a small shortfall can remain; it stays in the
+ledger. Each day is lowered from that day's own stage. Without the limit, the Clam's headwater channels, left
 nearly dry once SWAT+'s aquifers pass recharge through, lost 84 million m3 to MODFLOW 6 that they didn't have.
 
 Other limits of this version:
@@ -118,18 +119,27 @@ class StreamExchange:
         P = package.upper()
         self._cond = mf6.get("COND", mf6.model, P).astype(float)
         self._rbot = mf6.get("RBOT", mf6.model, P).astype(float)
+        self._wrote = None  # (entries, stages before lowering, stages written) from the last day lowered
 
     def limit(self, available: dict[str, float]) -> dict[str, float]:
         """Lower today's stages where a channel would lose more than ``available`` (m3 for the day), before the
         solve. Returns the depth each channel was lowered by, m."""
         n = self.mf6.nbound(self.package)
         stage = self.mf6.get("STAGE", self.mf6.model, self.package.upper()).astype(float)
+        if self._wrote is not None:
+            # each day is lowered from its own stage: entries nothing has set since (a fixed stage) go back to theirs
+            idx, before, wrote = self._wrote
+            keep = stage[idx] == wrote
+            stage[idx[keep]] = before[keep]
+            self._wrote = None
         head = self.mf6.head()[self.mf6.package_nodes(self.package)]
         new, d = limit_to_supply(stage[:n], self._rbot[:n], self._cond[:n], head, self.map.entry_channel[:n],
                                  np.array([available[c] for c in self.map.channels]))
-        if np.any(d > 0):
+        changed = np.flatnonzero(new != stage[:n])
+        if len(changed):
+            self._wrote = (changed, stage[changed].copy(), new[changed].copy())
             stage[:n] = new
-            self.mf6.set_stage(self.package, stage)
+        self.mf6.set_stage(self.package, stage)
         return dict(zip(self.map.channels, d.tolist()))
 
     def after_solve(self) -> dict[str, float]:
