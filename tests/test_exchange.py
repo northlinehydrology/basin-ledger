@@ -110,6 +110,7 @@ def test_stage_from_swat_depth(swatplus):
     cfg = C.load(ROOT / "examples" / "synthetic" / "two_way.toml")
     cfg.run_folder = RUNS
     cfg.rivers = {"package": "riv", "map": "all:cha01", "stage": "surface_depth", "bed_thickness": 1.0}
+    cfg.exchange = dict(cfg.exchange, limit=False)  # the stage as set from SWAT+'s depth, before any lowering
     b = Basin(cfg, run="two-way-stage", days=200)
     stages, depths = [], []
     for _ in range(200):
@@ -127,23 +128,23 @@ def test_stage_from_swat_depth(swatplus):
 
 
 def test_limit_to_supply_fits_the_loss():
-    """The stage is lowered only where a channel would lose more than it has, never below the bottom, and then
-    loses no more than it has."""
+    """The stage is lowered only where a channel's net exchange would take more than it has, never below the bottom,
+    and then takes no more than it has; a channel's gaining entries count against its losses."""
     from basinledger.coupling.exchange import limit_to_supply
     stage = np.array([10.0, 10.0, 10.0, 5.0])
     rbot = np.array([9.0, 9.0, 9.0, 4.0])
     cond = np.array([100.0, 100.0, 100.0, 50.0])
     head = np.array([8.0, 9.5, 11.0, 3.0])  # below the bottom, between, above (gaining); channel 2 below
     ch = np.array([0, 0, 0, 1])
-    loss = lambda st: cond * np.clip(st - np.maximum(head, rbot), 0, None)  # noqa: E731
-    new, d = limit_to_supply(stage, rbot, cond, head, ch, np.array([60.0, 1000.0]))
-    assert loss(stage)[:3].sum() == pytest.approx(150.0)
-    assert loss(new)[:3].sum() == pytest.approx(60.0, rel=1e-9)
+    net = lambda st: (cond * (np.clip(st - np.maximum(head, rbot), 0, None) - np.clip(head - st, 0, None)))  # noqa
+    assert net(stage)[:3].sum() == pytest.approx(50.0)  # losses of 150 less a gain of 100
+    new, d = limit_to_supply(stage, rbot, cond, head, ch, np.array([20.0, 1000.0]))
+    assert net(new)[:3].sum() == pytest.approx(20.0, rel=1e-9)
     assert d[0] > 0 and d[1] == 0 and new[3] == stage[3]
     assert (new >= rbot).all()
     new, d = limit_to_supply(stage, rbot, cond, head, ch, np.array([0.0, 0.0]))
-    assert loss(new).sum() == pytest.approx(0.0, abs=1e-9)
-    np.testing.assert_allclose(new, rbot)
+    assert net(new)[:3].sum() <= 1e-9 and net(new)[3] == pytest.approx(0.0, abs=1e-9)
+    assert (new >= rbot).all()
 
 
 def test_the_limit_removes_the_shortfall(swatplus):

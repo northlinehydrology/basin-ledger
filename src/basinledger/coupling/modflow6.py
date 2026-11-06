@@ -130,8 +130,30 @@ class Modflow6:
         """River stages, m, one per entry of a river package."""
         self.set("STAGE", package, np.asarray(stage, dtype=float))
 
-    def solve_day(self):
-        self.api.do_time_step()
+    def solve_day(self, callback=None, max_rounds: int = 30):
+        """Solve the day prepared. ``callback()``, if given, runs after each outer iteration and returns whether it
+        changed a boundary; the day is done once the solve has converged and the callback changes nothing (or it
+        has changed something ``max_rounds`` times after convergence). How a coupling sets a boundary from the heads
+        within the day: moving the boundary with the iterations, rather than after each convergence, takes about
+        half as many iterations."""
+        if callback is None:
+            self.api.do_time_step()
+        else:
+            self.api.prepare_solve(1)
+            iterations, rounds = 0, 0
+            while True:
+                converged = self.api.solve(1)
+                iterations += 1
+                changed = callback()
+                if converged and not changed:
+                    break
+                if converged:
+                    rounds += 1
+                    if rounds >= max_rounds:
+                        break
+                if iterations >= 2000:
+                    raise RuntimeError(f"MODFLOW 6 didn't converge on day {self.day}")
+            self.api.finalize_solve(1)
         self.api.finalize_time_step()
         self.day += 1
 

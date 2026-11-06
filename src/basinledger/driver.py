@@ -403,12 +403,22 @@ class Basin:
         rt.apply_wells()
         if self.cfg.rivers:
             self._rivers_day()
+        limit = None
         if self.exchange is not None and self.cfg.exchange.get("limit", True):
-            # a losing reach takes no more than its channel carries today (exchange.limit_to_supply)
+            # a losing reach takes no more than its channel carries today, within the solve (exchange.limit)
+            # what each channel has without today's exchange, which won't be there tomorrow when this one is taken
             flow = dict(zip(self.sw.names(S.QOUT), self.sw.get(S.QOUT) * DAY))
-            for c, d in self.exchange.limit({c: flow[c] for c in self.due}).items():
+            if self.direct_exchange:
+                applied = self._exchanged
+            else:
+                applied = {c: L.today(f"route:swat:point_source:gw_{c}:delivered")
+                           - L.today(f"route:swat:place_of_use:seep_{c}:delivered") for c in self.due}
+            limit = self.exchange.limit({c: max(flow[c] - applied[c], 0.0) for c in self.due})
+        self.mf6.solve_day(limit)
+        if limit is not None:
+            for c, d in self.exchange.lowered.items():
                 L.enter(f"exchange:{c}:stage_lowered_m", d)
-        self.mf6.solve_day()
+            self.exchange.end_day()
         L.enter("recharge:received", self.recharge.received())
         rt.read_wells()
         if self.cfg.rivers:

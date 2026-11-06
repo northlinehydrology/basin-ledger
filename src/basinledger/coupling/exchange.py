@@ -17,12 +17,13 @@ deep recharge), so groundwater reaches the streams once, through MODFLOW 6. The 
 at zero every day.
 
 **Limited by supply** (``[exchange] limit``, on by default): a losing reach can't take more than its channel carries
-that day. Before the solve, each coupled channel's loss is predicted at its entries' stages and the day's starting
-heads. Where it is more than the channel's flow that day, the channel's stages are lowered by one depth, no entry
-below its bottom, until the predicted loss fits (``limit_to_supply``). Lowering the stage is the smooth form of
-the river drying: the reach loses less, and gains more where the head is above it. The heads move during the solve,
-and today's loss is taken from tomorrow's flow (the one-day lag), so a small shortfall can remain; it stays in the
-ledger. Each day is lowered from that day's own stage. Without the limit, the Clam's headwater channels, left
+that day. The limit works inside MODFLOW 6's solve, on the heads as they are: after each converged outer iteration,
+any coupled channel losing more than its flow that day has its stages lowered by one depth, no entry below its
+bottom, until the loss fits (``limit_to_supply``), and the solve goes on until heads and stages agree. Lowering the
+stage is the smooth form of the river drying: the reach loses less, and gains more where the head is above it.
+Today's loss is taken from tomorrow's flow (the one-day lag), so a small shortfall can remain; it stays in the
+ledger. Each day starts from its own stages. A limit set before the solve, at the day's starting heads, wasn't
+enough: wells and drains beside a river pull its heads down during the day. Without the limit, the Clam's headwater channels, left
 nearly dry once SWAT+'s aquifers pass recharge through, lost 84 million m3 to MODFLOW 6 that they didn't have.
 
 Other limits of this version:
@@ -77,32 +78,40 @@ class ChannelMap:
         return cls(chans, entry)
 
 
+STAGE_TOLERANCE_M = 1e-3  # the supply limit's stages agree with the heads when no stage moves more than this
+
+
 def limit_to_supply(stage: np.ndarray, rbot: np.ndarray, cond: np.ndarray, head: np.ndarray, entry_channel: np.ndarray,
                     available: np.ndarray, iterations: int = 60) -> tuple[np.ndarray, np.ndarray]:
-    """Stages lowered so that no channel's predicted loss is more than it has.
+    """Stages lowered so that no channel's net exchange takes more than it has, at the given heads.
 
-    Per entry, MODFLOW 6's river package takes ``cond * (stage - max(head, rbot))`` from the river when that is
-    positive. For each channel (``entry_channel``, -1 for entries not coupled) whose total is more than
-    ``available`` (m3 for the day), its entries' stages are lowered by one depth d, ``max(stage - d, rbot)``, with d
-    found by bisection. At d = max(stage - rbot) the channel takes nothing, so a d always exists. Returns the new
-    stages and each channel's d (m, 0 where nothing was lowered)."""
+    Per entry, MODFLOW 6's river package exchanges ``cond * (stage - max(head, rbot))`` with the aquifer: into it
+    when positive (a loss), out of it when negative (a gain). A channel's net loss is the sum over its entries
+    (``entry_channel``, -1 for entries not coupled). Where it is more than ``available`` (m3 for the day; a channel's
+    other gains, such as seepage, can be added to it), the channel's stages are lowered by one depth d,
+    ``max(stage - d, rbot)``, with d found by bisection: the losses shrink and the gains grow as d grows, and at
+    d = max(stage - rbot) the channel loses nothing, so a d always exists. Returns the new stages and each
+    channel's d (m, 0 where nothing was lowered)."""
     stage = np.asarray(stage, float).copy()
     floor = np.maximum(head, rbot)
+    head = np.asarray(head, float)
 
-    def loss(st, sel):
-        return float(np.sum(cond[sel] * np.clip(st[sel] - floor[sel], 0.0, None)))
+    def net_loss(st, sel):
+        lose = np.clip(st[sel] - floor[sel], 0.0, None)
+        gain = np.clip(head[sel] - st[sel], 0.0, None)
+        return float(np.sum(cond[sel] * (lose - gain)))
 
     lowered = np.zeros(len(available))
     for i, have in enumerate(np.maximum(available, 0.0)):
         sel = np.flatnonzero(entry_channel == i)
-        if len(sel) == 0 or loss(stage, sel) <= have:
+        if len(sel) == 0 or net_loss(stage, sel) <= have:
             continue
         lo, hi = 0.0, float(np.max(stage[sel] - rbot[sel]))
         s0 = stage.copy()
         for _ in range(iterations):
             mid = 0.5 * (lo + hi)
             s0[sel] = np.maximum(stage[sel] - mid, rbot[sel])
-            lo, hi = (lo, mid) if loss(s0, sel) <= have else (mid, hi)
+            lo, hi = (lo, mid) if net_loss(s0, sel) <= have else (mid, hi)
         stage[sel] = np.maximum(stage[sel] - hi, rbot[sel])
         lowered[i] = hi
     return stage, lowered
@@ -130,28 +139,54 @@ class StreamExchange:
         P = package.upper()
         self._cond = mf6.get("COND", mf6.model, P).astype(float)
         self._rbot = mf6.get("RBOT", mf6.model, P).astype(float)
-        self._wrote = None  # (entries, stages before lowering, stages written) from the last day lowered
 
-    def limit(self, available: dict[str, float]) -> dict[str, float]:
-        """Lower today's stages where a channel would lose more than ``available`` (m3 for the day), before the
-        solve. Returns the depth each channel was lowered by, m."""
+    def limit(self, available: dict[str, float]):
+        """The supply limit for today's solve, as a callback for ``Modflow6.solve_day``: after each converged outer
+        iteration it lowers, from the day's own stages, the stages of any channel whose net exchange (rivers and
+        drains together, at the heads as they are then) takes more than ``available``, and says whether anything
+        changed, so the solve goes on until heads and stages agree. ``available`` (m3 for the day) is the channel's
+        flow without today's exchange: the exchange is taken tomorrow, when today's won't be there. Counting it let
+        a channel lose on alternate days what it gained the day before (the Clam). ``end_day`` puts the day's stages
+        back after the solve."""
+        P = self.package.upper()
         n = self.mf6.nbound(self.package)
-        stage = self.mf6.get("STAGE", self.mf6.model, self.package.upper()).astype(float)
-        if self._wrote is not None:
-            # each day is lowered from its own stage: entries nothing has set since (a fixed stage) go back to theirs
-            idx, before, wrote = self._wrote
-            keep = stage[idx] == wrote
-            stage[idx[keep]] = before[keep]
-            self._wrote = None
-        head = self.mf6.head()[self.mf6.package_nodes(self.package)]
-        new, d = limit_to_supply(stage[:n], self._rbot[:n], self._cond[:n], head, self.map.entry_channel[:n],
-                                 np.array([available[c] for c in self.map.channels]))
-        changed = np.flatnonzero(new != stage[:n])
-        if len(changed):
-            self._wrote = (changed, stage[changed].copy(), new[changed].copy())
+        self._stage0 = self.mf6.get("STAGE", self.mf6.model, P).astype(float)
+        nodes = self.mf6.package_nodes(self.package)
+        e = self.map.entry_channel[:n]
+        have = np.array([available[c] for c in self.map.channels])
+        self.lowered = dict.fromkeys(self.map.channels, 0.0)
+
+        drains = None
+        if self.drains is not None:
+            dp, dmap = self.drains
+            nd = self.mf6.nbound(dp)
+            D = dp.upper()
+            drains = (self.mf6.package_nodes(dp), self.mf6.get("ELEV", self.mf6.model, D).astype(float)[:nd],
+                      self.mf6.get("COND", self.mf6.model, D).astype(float)[:nd], dmap.entry_channel[:nd])
+
+        def callback() -> bool:
+            stage = self.mf6.get("STAGE", self.mf6.model, P).astype(float)
+            h = self.mf6.head()
+            extra = have.copy()
+            if drains is not None:  # the channel's seepage at these heads
+                dn, elev, dc, de = drains
+                q = dc * np.clip(h[dn] - elev, 0.0, None)
+                extra += np.bincount(de[de >= 0], weights=q[de >= 0], minlength=len(have))
+            new, d = limit_to_supply(self._stage0[:n], self._rbot[:n], self._cond[:n], h[nodes], e, extra)
+            self.lowered = dict(zip(self.map.channels, d.tolist()))
+            if np.max(np.abs(new - stage[:n]), initial=0.0) <= STAGE_TOLERANCE_M:
+                return False
             stage[:n] = new
-        self.mf6.set_stage(self.package, stage)
-        return dict(zip(self.map.channels, d.tolist()))
+            self.mf6.set_stage(self.package, stage)
+            return True
+
+        return callback
+
+    def end_day(self):
+        """The day's own stages back, so tomorrow starts from them (a fixed stage would otherwise stay lowered)."""
+        if getattr(self, "_stage0", None) is not None:
+            self.mf6.set_stage(self.package, self._stage0)
+            self._stage0 = None
 
     def after_solve(self) -> dict[str, float]:
         """Today's exchange per channel (m3, positive to the stream), due in SWAT+ tomorrow: the rivers' net

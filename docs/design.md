@@ -385,15 +385,20 @@ exchange replaces SWAT+'s aquifer return flow.
   SWAT+'s channel balance closes. The ledger enters what SWAT+ reports it actually exchanged.
   - Before 0.2.0, the exchange went through one point source and one water allocation place of use per channel.
   - A negative point source would not work: SWAT+ 62.0.1 records it in full even when the channel can't supply it.
-- **Limited by supply (built Nov 6, 2026; `[exchange] limit`, on by default).** Before each solve, a channel's loss
-  is predicted at its stages and the day's starting heads. Where it is more than the channel carries that day, the
-  channel's stages are lowered by one depth, no entry below its bottom, until it fits (`limit_to_supply`). The
-  ledger records the depth (`exchange:<channel>:stage_lowered_m`).
+- **Limited by supply (built Nov 6, 2026; `[exchange] limit`, on by default).** A channel's net exchange (its
+  river cells' gains and losses and its drains' seepage) can't take more than the channel has without today's
+  exchange, which won't be there tomorrow when this one is taken. The limit works inside MODFLOW 6's solve: after
+  each outer iteration, a channel taking more than that at the heads as they are has its stages lowered by one
+  depth, no entry below its bottom (`limit_to_supply`), and the day is done when the solve has converged and no
+  stage moves more than 1 mm. The ledger records the depth (`exchange:<channel>:stage_lowered_m`). Two earlier
+  forms failed on the Clam: a limit set before the solve, at the day's starting heads (wells and drains beside a
+  river pull its heads down during the day), and a limit that counted the channel's own gain from the day before,
+  so it lost on alternate days what it had gained.
 - **Shortfalls.** What the channel still can't supply is entered in the ledger: water MODFLOW 6 took from a stream
-  that, in SWAT+, wasn't there. Most of what remains is the lag: today's loss is set against today's flow but taken
-  from tomorrow's, which is lower in a recession; the heads also move during the solve. In the synthetic two-way
-  example the shortfall is 186 m³ over three years without the limit and 72 m³ with it, against about 62,000 m³ of
-  exchange (0.1%). Each day is lowered from its own stage, so a run restarted from a saved day matches.
+  that, in SWAT+, wasn't there. Most of what remains is the one-day lag. Over 120 days at the Clam the shortfall is
+  16.3 million m3 without the limit (35% of the exchange) and 0.2 million m3 with it (0.7%); the run takes about
+  twice as long. In the synthetic two-way example it is 186 m3 over three years without the limit and 76 m3 with
+  it, of about 61,000 m3. Each day starts from its own stages, so a restarted run matches.
 - **Stage.** With `[rivers] stage = "surface_depth"`, MODFLOW 6's river stage on day *d* is the river bottom plus
   the bed thickness plus SWAT+'s channel depth for day *d* (`channel_water__depth`, on SWAT+'s rating curve,
   swatplus-bmi 0.2.0). Otherwise it is fixed in the input. Under a NextGen replay the same setting uses t-route's
