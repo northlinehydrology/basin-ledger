@@ -197,7 +197,8 @@ class Basin:
                 comp = load_component(u.component)
                 wu = WaterUser(u.name, comp, str(u.config) if u.config else None,
                                variables=u.variables or None, constituents=u.constituents,
-                               inputs=self._forcing(u, comp), report=u.report or None)
+                               report=u.report or None)
+                wu.inputs = self._forcing(u, comp)  # after initialize, when a component's inputs are known
                 self.users.append((u, wu))
                 for route in (u.withdrawal, u.returns):
                     k, name = kind(route)
