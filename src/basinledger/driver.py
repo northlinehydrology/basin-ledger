@@ -54,10 +54,14 @@ def _example_function(cfg: C.ExampleConfig, spec: str, default: str):
 
 class Basin:
     def __init__(self, cfg: C.ExampleConfig, run: str = "base", users: bool = True, days: int | None = None,
-                 restart: str | Path | None = None, prepare=None, heads: np.ndarray | None = None):
+                 restart: str | Path | None = None, prepare=None, heads: np.ndarray | None = None,
+                 wrap_surface=None):
         """``prepare(model, folder)``, if given, is called on the run's copy of each model's files ("swatplus",
         "modflow6") before that model starts: where a calibration writes a parameter set. ``heads``: MODFLOW 6's
-        starting heads (per reduced node), in place of its input's, as from ``spin_up``."""
+        starting heads (per reduced node), in place of its input's, as from ``spin_up``. ``wrap_surface(model)``,
+        if given, returns what the driver steps in place of the surface model once it has started: a study's way to
+        hold or replace one of its values through BMI each day (a process substitution), with everything else
+        passed through."""
         self.cfg = cfg
         self.status = cfg.calibration_status  # 'screening' unless the example's record says 'calibrated'
         self.folder = cfg.run_folder / run
@@ -98,6 +102,8 @@ class Basin:
                 raise ValueError("SWAT+ isn't set up to be coupled:\n- " + "\n- ".join(problems))
             self.swat = SwatPlusBmi()
             self.swat.initialize(str(swat_dir))
+            if wrap_surface is not None:
+                self.swat = wrap_surface(self.swat)
         else:
             from .coupling.nextgen import NgenReplay
             if ex or cfg.places_of_use or cfg.point_sources:

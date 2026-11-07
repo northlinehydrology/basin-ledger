@@ -44,3 +44,22 @@ def test_cases_start_from_the_same_warm_up(swatplus):
         assert np.array_equal(ta[k][:WARM], tc[k][:WARM])
     assert not np.allclose(ta["exchange:cha01:to_stream"][WARM:], tc["exchange:cha01:to_stream"][WARM:])
     assert np.nansum(tc["route:well:pw1:delivered"][:WARM]) == 0 and np.nansum(tc["route:well:pw1:delivered"]) > 0
+
+
+def test_a_wrapped_surface_is_what_the_driver_steps(swatplus):
+    """wrap_surface: the driver steps the wrapper, so a study can hold or replace a value each day."""
+    class Counting:
+        def __init__(self, m):
+            self._m, self.days = m, 0
+
+        def update(self):
+            self.days += 1
+            self._m.update()
+
+        def __getattr__(self, name):
+            return getattr(self._m, name)
+
+    b = Basin(config(), run="scen-wrapped", users=False, days=30, wrap_surface=Counting)
+    b.run()
+    assert b.swat.days == 30
+    b.finalize()
