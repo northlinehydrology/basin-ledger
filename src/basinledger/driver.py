@@ -367,6 +367,8 @@ class Basin:
                     self.utilities[name].add_user(0.0 if is_return else vol, vol if is_return else 0.0)
                 else:
                     rt.request(route, vol)
+                    if is_return and use.return_temperature is not None:  # heat, m3 C, for the stream temperature
+                        L.enter(f"route:{route}:heat_m3C", vol * use.return_temperature)
         for chain in self.utilities.values():
             for route, vol in chain.close_day(L).items():
                 rt.request(route, vol)

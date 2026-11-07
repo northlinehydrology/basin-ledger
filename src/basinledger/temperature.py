@@ -4,7 +4,9 @@ Each reach, each day, upstream first:
 
 1. **Mixing.** The water entering the reach is mixed by volume (m3), each source at its temperature [A]:
    upstream reaches at the temperature this module gave them; lakes at ``5 + 0.75 x`` the day's air temperature
-   (what SWAT+ gives any inflow that isn't a channel); surface runoff, lateral flow and snowmelt at
+   (what SWAT+ gives any inflow that isn't a channel); water users' returns through point sources at their own
+   temperature (the ledger's ``route:<point source>:heat_m3C`` over its volume); surface runoff, lateral flow and
+   snowmelt at
    ``ch_temp.f90``'s lagged air temperatures (0.75 x the 5-, 10- and 2-day means, melt capped at 2.5 C); and
    **groundwater from MODFLOW 6 at a stated temperature**, by default the mean annual air temperature at the reach's
    station over the run [A] (shallow groundwater tracks the mean annual air temperature, typically within 1 to 2 C;
@@ -258,6 +260,21 @@ def stream_temperature(run: str | Path, coef: Coefficients | None = None) -> dic
             ledger[d] = {c: float(r[f"exchange:{c}:applied"]) for c in chans if f"exchange:{c}:applied" in r}
             seep_made[d] = {c: float(r[f"exchange:{c}:seepage"]) for c in chans if f"exchange:{c}:seepage" in r}
     dates = sorted(set(cha) & set(lsu) & set(ledger))
+    # water users' returns into channels through point sources: volume and heat (m3 C) per channel and day
+    returns = {}
+    if (swat / "recall.con").exists():
+        hr, rr = _rows(swat / "recall.con")
+        to_ch = {r[1]: f"cha{int(r[-3]):03d}" for r in rr if r[-4] == "sdc"}
+        with open(run / "outputs" / "ledger.csv", newline="") as f:
+            for r in csv.DictReader(f):
+                d = dt.date.fromisoformat(r["date"])
+                for name, ch in to_ch.items():
+                    v = r.get(f"route:swat:point_source:{name}:delivered")
+                    if v in (None, "", "nan") or float(v) <= 0:
+                        continue
+                    h = r.get(f"route:swat:point_source:{name}:heat_m3C")
+                    vol, heat = returns.get((d, ch), (0.0, 0.0))
+                    returns[(d, ch)] = (vol + float(v), heat + (float(h) if h not in (None, "", "nan") else np.nan))
     stations = {s: _weather(swat, s, coef.humidity_if_generated) for s in set(wst.values())}
 
     def lagged(st, d, n):
@@ -271,7 +288,7 @@ def stream_temperature(run: str | Path, coef: Coefficients | None = None) -> dic
 
     T = np.zeros((len(dates), len(chans)))
     S = np.zeros_like(T)
-    names = ("upstream", "lakes", "surface", "lateral", "snowmelt", "groundwater")
+    names = ("upstream", "lakes", "surface", "lateral", "snowmelt", "groundwater", "returns")
     src = {k: np.zeros_like(T) for k in names}
     heat = {k: np.zeros_like(T) for k in ("in_J", "exchanged_J", "out_J", "floor_J")}
     col = {c: j for j, c in enumerate(chans)}
@@ -304,10 +321,13 @@ def stream_temperature(run: str | Path, coef: Coefficients | None = None) -> dic
             v_up = sum(cha[d][x]["flo_out"] * 86400 for x in ups)
             t_up = (sum(cha[d][x]["flo_out"] * 86400 * temp_today[x] for x in ups) / v_up) if v_up > 0 else 0.0
             v_in = cha[d][c]["flo_in"] * 86400
-            v_lake = max(v_in - v_up - v_surf - v_lat - v_gw - v_seep, 0.0) if any(
+            v_ret, heat_ret = returns.get((d, c), (0.0, 0.0))
+            t_ret = heat_ret / v_ret if v_ret > 0 and np.isfinite(heat_ret) else t_surf  # [A] if no temperature given
+            v_lake = max(v_in - v_up - v_surf - v_lat - v_gw - v_seep - v_ret, 0.0) if any(
                 dn == c and x.startswith("res") for x, dn in down.items()) else 0.0
             parts = [(v_up, t_up), (v_lake, t_lake), ((1 - melt) * v_surf + v_seep, t_surf),
-                     ((1 - melt) * v_lat, t_lat), (melt * (v_surf + v_lat), t_sno), (v_gw, t_gw_of[wst[c]])]
+                     ((1 - melt) * v_lat, t_lat), (melt * (v_surf + v_lat), t_sno), (v_gw, t_gw_of[wst[c]]),
+                     (v_ret, t_ret)]
             jd = d.timetuple().tm_yday
             r = reach_heat_balance(parts, tave, w["hmd"], w["wnd"], w["slr"], _solradmx(st["lat"], jd), geo[c],
                                    cha[d][c]["flo_in"], cha[d][c]["flo_out"], area_ha[c], coef)
