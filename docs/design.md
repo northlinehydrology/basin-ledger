@@ -537,6 +537,53 @@ groundwater. Transport settles over decades, not the year a flow warm-up takes, 
 2. The streams' side through swatplus-bmi (recharge mass readable, a gain's mass and point-source loads settable,
    channel concentrations readable): requested of the swatplus-bmi session once stage 1 shows which variables are
    needed. Until then the return's concentration change is worked out after the run (`analysis.concentration_change`).
+
+**Stage 1, built (Nov 6, 2026).** `coupling/transport.py`, `[transport.<species>]` in an example's config, and
+`examples/synthetic/transport.toml`.
+- **Building:** `add_transport(sim, gwf, species, porosity, dispersivity, sorption, strt, sources)` in an example's
+  builder adds `gwt_<species>` with its own IMS, the GWF6-GWT6 exchange and MST, ADV (TVD by default), DSP
+  (transverse dispersivities a tenth and a hundredth of the longitudinal [A]), IC, SSM and OC. Each source package
+  is given its auxiliary variable if it lacks it.
+- **Each day:** after MODFLOW 6 prepares the day, the recharge's concentration and that of the coupled rivers'
+  losses are set, both stated [A]. They are set on the transport model's copy of the flow package's auxiliary values
+  (`GWT_<NAME>/FMI-FT<n>/AUXVAR`): set on the flow package itself after prepare they do nothing, and before it they
+  act a day late. The solve with the supply limit's callback now solves the transport solutions after the flow's
+  (it had solved only the flow's).
+- **Intake:** after the solve, the concentration at each configured well becomes the next day's
+  `water_user_intake_water_<species>__mass_concentration` of each user withdrawing from it. The users run before
+  MODFLOW 6 each day, so the intake lags the aquifer by a day, as the exchange does; the mass that lag moves is the
+  difference between `transport:<sp>:well:<w>:withdrawn` and the users' `intake:<sp>:kg` (0.03% over two years on
+  the synthetic run). A user on a well through a utility chain isn't given the intake yet.
+- **Ledger (kg):** recharge as sent (stated concentration × the volume sent) and received (the transport model's
+  intake of it); each well's mass withdrawn and its concentration; each coupled channel's mass to the stream (gains
+  and drains) and from it (losses, as sent and received); boundaries not coupled, by package, and GWT's own (CNC,
+  SRC); release from mobile and sorbed storage (MST's rates); and `transport:<sp>:closure_share`, held to 1e-6 of
+  the day's gross mass flow every day (it closes to about 1e-12). Inflow carries the auxiliary value, outflow the
+  cell's concentration at the end of the day, as MODFLOW 6's implicit step has it.
+- **Refused at start-up:** a transport model with no `[transport]` section, a recharge or coupled river package
+  that isn't an AUX source in SSM, a coupled exchange with no stated stream concentration, a constant intake the
+  aquifer would replace, SSM's AUXMIXED and file sources, and decay (not yet in the ledger).
+- **Restarts** save and restore each species' concentrations with the heads, bit for bit.
+- **Not yet:** the steady-state start (the tests start from a stated concentration), concentrations at the river and
+  drain cells reported per channel for stage 2, and the stage 2 links below.
+
+**What stage 2 needs of swatplus-bmi** (SWAT+ 62.0.1's own variables; names to be settled there):
+- recharge mass per aquifer, readable: each salt ion's `obcs(icmd)%hin(1)%salt(m)` (kg a day, kept as
+  `asaltb_d(iaq)%salt(m)%rchrg`; chloride is the sixth of the eight ions), soluble P `ob(icmd)%hin%solp`, nitrate
+  `ob(icmd)%hin%no3`;
+- a gain's mass, settable with the gain's water: the channel's `obcs(icmd)%trans%salt(m)`, which
+  `sd_channel_control3` adds to the inflow's constituents as it adds `ob(icmd)%trans` to its water, and
+  `ob(icmd)%trans%solp`;
+- a loss's mass taken with the loss: `exch_channel` takes the water but not the salts (`hcs2%salt`), and the mass
+  taken should be readable;
+- channel concentrations, readable: `ch_water(ich)%salt(m) / ch_stor(ich)%flo` (or `chsalt_d(ich)%salt(m)%conc`, mg/L
+  at the end of the day) and `ch_stor(ich)%solp / ch_stor(ich)%flo`;
+- point-source loads, settable: the recall's `rec_salt(irec)%hd_salt(day, yr)%salt(m)` (copied to
+  `obcs(icmd)%hd(1)%salt(m)` by `recall_salt`) and `recall(irec)%hd(day, yr)%solp`;
+- the aquifer's salt passed through as its water is: with return flow off, `asaltb_d(iaq)%salt(m)%saltgw` stays zero
+  but `cs_aqu(iaq)%salt(m)` keeps the recharge's mass, a store the ledger would have to hold. SWAT+'s aquifer P
+  outflow is the recharge volume times a fixed concentration (`aqu_d%minp = hin%flo * aqu_dat%minp`), not mass
+  carried from recharge.
 3. In each study, SWAT+'s salt module set up (rain chemistry, fertilizer, road salt), and starting concentrations
    from public samples.
 

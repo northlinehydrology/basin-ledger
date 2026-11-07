@@ -41,8 +41,11 @@ not the basin.
   return + storage change); the utility chain;
 - accounts that must stay zero: SWAT+'s aquifer outflow in two-way mode;
 - MODFLOW 6's closure against the day's gross flow, to 1e-6 (`groundwater:closure_share`);
+- with transport, each species' mass: recharge's as sent and received, each coupled channel's losses as sent and
+  received, and the closure against the day's gross mass flow, to 1e-6 (`transport:<species>:closure_share`);
 - recharge mapped on each aquifer's own area (`area_rtol`, 1e-6 unless an example turns it off and says why), and
   what the map added or couldn't place booked as `recharge:by_the_map`;
+- start-up: every transport model configured, its recharge and coupled rivers AUX sources in SSM, no decay;
 - start-up: SWAT+ on a daily step; in two-way mode its aquifers passing recharge through, nothing in
   `calibration.cal` turning them back on, no channel transmission loss; MODFLOW 6's recharge package one entry per
   cell, no multiplier.
@@ -64,6 +67,7 @@ not the basin.
 | stream temperature | yes (energy closes) | | yes (G4) | energy | | Clam |
 | whole-basin balance | | | yes (G3) | | | Clam |
 | NextGen replay | yes | yes | yes | | | Plaster Creek |
+| groundwater transport: mass ledger, intake from a well | yes (builder, Ogata and Banks) | yes | yes (coupled two-way, restarts) | Ogata and Banks; uniform steady state | start-up checks | |
 
 Built Nov 6, 2026 (G1 to G7; G7, water users on SWAT+'s weather, was found while building G6). What they turned up:
 - SWAT+ 62.0.1 reads `print.prt`'s object rows by position unless `use_obj_labels` is on, and Osu_1hru's rows are out
@@ -72,6 +76,26 @@ Built Nov 6, 2026 (G1 to G7; G7, water users on SWAT+'s weather, was found while
 - `ch_temp`'s single explicit heat-exchange step overshoots the equilibrium temperature on a long reach (Osu_1hru's
   channel reached 90 C); the heat balance integrates it exactly.
 - MODFLOW 6 through the coupling's wrapper matches Glover and Balmer within 0.5% of the pumping from day 10.
+
+Built Nov 6, 2026, for water quality's stage 1 (`tests/test_transport.py`; design.md, "Water quality across links"):
+- mass closes every day to about 1e-12 of the gross mass flow, with recharge, a well, a river that gains and loses,
+  drains and linear sorption, through the supply limit's solve path and `do_time_step`;
+- a steady flow under recharge at one concentration, starting from none, ends at that concentration in every cell
+  (to 1e-8) after 22 turnovers;
+- a 501 m column with the first cell held at C0 (v = 0.5 m/d, D = 5 m2/d, daily steps, TVD) is within 0.42% of C0
+  of Ogata and Banks (1961) at every cell at 100, 200 and 300 days; held to 1%;
+- on the synthetic two-way run (`examples/synthetic/transport.toml`) the user's intake on each day is the aquifer's
+  at its well the day before, its returned mass is that intake, and the well's mass differs from it by the lag
+  (0.03% over two years); a restart carries the concentrations bit for bit.
+
+What it turned up:
+- `Modflow6.solve_day` with a callback (the supply limit's path) prepared, solved and finalized only the first
+  solution, so a transport model was never solved there: it now solves every solution after the flow's.
+- MODFLOW 6 copies a flow package's auxiliary values into the transport model (`FMI-FT<n>/AUXVAR`) when it prepares
+  the step: a concentration set on the flow package afterwards does nothing, and one set on its input before acts a
+  day late. Basin Ledger sets the transport model's copy.
+- The driver read a user's input names before the component was initialized; they are now read after, as BMI
+  intends (a component's inputs can depend on its config).
 
 The gaps, each to be built with its test:
 
