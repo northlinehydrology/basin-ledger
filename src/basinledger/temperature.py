@@ -51,6 +51,7 @@ class Coefficients:
     pk_rto: float = 1.0           # SWAT+'s peak rate ratio (sd_ch%pk_rto) [A]
     swat_dew_point: bool = False
     heat_exchange: bool = True    # off: the mixed temperature only, for checks
+    seepage_as_runoff: bool = True  # drains' seepage reaches the stream over land, at the runoff's temperature [A]
 
 
 def print_daily(project: Path, objects: list[str]):
@@ -219,11 +220,12 @@ def stream_temperature(run: str | Path, coef: Coefficients | None = None) -> dic
         d = dt.date(int(r[3]), 1, 1) + dt.timedelta(days=int(r[0]) - 1)
         swat_t.setdefault(d, {})[r[hc.index("name")]] = float(r[-2])
     lsu = daily(swat / "lsunit_wb_day.txt", "name", ["precip", "snofall", "snomlt", "surq_gen", "latq"])
-    ledger = {}
+    ledger, seep_made = {}, {}
     with open(run / "outputs" / "ledger.csv", newline="") as f:
         for r in csv.DictReader(f):
             d = dt.date.fromisoformat(r["date"])
             ledger[d] = {c: float(r[f"exchange:{c}:applied"]) for c in chans if f"exchange:{c}:applied" in r}
+            seep_made[d] = {c: float(r[f"exchange:{c}:seepage"]) for c in chans if f"exchange:{c}:seepage" in r}
     dates = sorted(set(cha) & set(lsu) & set(ledger))
     stations = {s: _weather(swat, s) for s in set(wst.values())}
 
@@ -263,14 +265,18 @@ def stream_temperature(run: str | Path, coef: Coefficients | None = None) -> dic
             rain = max(u["precip"] - u["snofall"], 0.0)
             melt = u["snomlt"] / (u["snomlt"] + rain) if (u["snomlt"] + rain) > 0 else 0.0
             v_gw = max(ledger[d].get(c, 0.0), 0.0)
+            # yesterday's seepage arrives today with the rest of the exchange (the one-day lag)
+            v_seep = min(max(seep_made.get(d - dt.timedelta(days=1), {}).get(c, 0.0), 0.0), v_gw) \
+                if coef.seepage_as_runoff else 0.0
+            v_gw -= v_seep
             ups = [x for x, dn in down.items() if dn == c and x.startswith("cha")]
             v_up = sum(cha[d][x]["flo_out"] * 86400 for x in ups)
             t_up = (sum(cha[d][x]["flo_out"] * 86400 * temp_today[x] for x in ups) / v_up) if v_up > 0 else 0.0
             v_in = cha[d][c]["flo_in"] * 86400
-            v_lake = max(v_in - v_up - v_surf - v_lat - v_gw, 0.0) if any(
+            v_lake = max(v_in - v_up - v_surf - v_lat - v_gw - v_seep, 0.0) if any(
                 dn == c and x.startswith("res") for x, dn in down.items()) else 0.0
-            parts = [(v_up, t_up), (v_lake, t_lake), ((1 - melt) * v_surf, t_surf), ((1 - melt) * v_lat, t_lat),
-                     (melt * (v_surf + v_lat), t_sno), (v_gw, t_gw_of[wst[c]])]
+            parts = [(v_up, t_up), (v_lake, t_lake), ((1 - melt) * v_surf + v_seep, t_surf),
+                     ((1 - melt) * v_lat, t_lat), (melt * (v_surf + v_lat), t_sno), (v_gw, t_gw_of[wst[c]])]
             jd = d.timetuple().tm_yday
             r = reach_heat_balance(parts, tave, w["hmd"], w["wnd"], w["slr"], _solradmx(st["lat"], jd), geo[c],
                                    cha[d][c]["flo_in"], cha[d][c]["flo_out"], area_ha[c], coef)
