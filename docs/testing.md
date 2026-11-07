@@ -114,3 +114,18 @@ Each run must close (tier 1); and across the runs:
 - the whole basin closes (G3) in every case.
 
 The summary (`functional.json`) is recorded, and later runs are compared with it (tier 6).
+
+### Tier 5 on the Clam, first results (Nov 6, 2026)
+
+19 checks, all passing on the second run (/Users/andrew/repos/clam-basin-study/functional.json; the study's
+AUDIT.md has the numbers). The first run failed six, each a defect here, fixed with a test:
+
+- point sources couldn't be added to a SWAT+ project with none (`_no_recalls_yet`);
+- the whole-basin balance counted a losing channel's loss as water from elsewhere, and left out lake and channel
+  storage: off by 5% of the outflow, now 0.09%;
+- the heat balance left a user's return out of the mix: a return now carries its heat
+  (`route:<point source>:heat_m3C`);
+- (the study's own) a rule threshold that never bound.
+
+A study can wrap the surface model (`Basin(..., wrap_surface=...)`), which the Clam uses for its soil hold through
+the scenarios; tested on the synthetic example.
