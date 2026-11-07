@@ -12,9 +12,16 @@ Day d, in order:
    river exchange are read back.
 6. **The ledger** enters both sides of every transfer and checks them. The day's flows and heads go to the outputs.
 
-``save(folder)`` writes the state at the pause after a day: SWAT+'s saved state (swatplus-bmi), MODFLOW 6's heads, the
-ledger, and the exchange due. ``Basin(..., restart=folder)`` carries on from there. SWAT+ and MODFLOW 6 continue
-exactly, and the users are stepped forward to the restart day.
+**Transport** (``[transport.<species>]``, coupling/transport.py): after MODFLOW 6 prepares the day, the recharge's and
+the coupled rivers' losses' concentrations are set [A]; after the solve, each species' mass is booked (kg) and the
+concentration at every configured well becomes the intake concentration
+(``water_user_intake_water_<species>__mass_concentration``) of each user withdrawing from it, for the next day. The
+users run before MODFLOW 6 each day, so their intake is the aquifer's at the end of the day before: a one-day lag, the
+same as the exchange's. On the first day it is the starting concentration.
+
+``save(folder)`` writes the state at the pause after a day: SWAT+'s saved state (swatplus-bmi), MODFLOW 6's heads and
+concentrations, the ledger, and the exchange due. ``Basin(..., restart=folder)`` carries on from there. SWAT+ and
+MODFLOW 6 continue exactly, and the users are stepped forward to the restart day.
 """
 
 from __future__ import annotations
@@ -145,8 +152,14 @@ class Basin:
                 self.mf6.set_heads(np.asarray(heads, float))
             if self.mf6.end < self.days - self.day - 1e-9:
                 raise ValueError(f"MODFLOW 6 simulation is {self.mf6.end} days; the run needs {self.days - self.day}")
-        elif cfg.wells or ex or cfg.outputs.get("heads") or cfg.rivers:
-            raise ValueError("wells, rivers, the two-way exchange and head outputs need a [modflow6] model")
+        elif cfg.wells or ex or cfg.outputs.get("heads") or cfg.rivers or cfg.transport:
+            raise ValueError("wells, rivers, the two-way exchange, transport and head outputs need a [modflow6] model")
+        self.transport = {}
+        if self.mf6 is not None:
+            self.transport = self._transport_models(cfg)
+            for sp, t in self.transport.items():
+                if saved:
+                    t.set_concentration(np.load(Path(restart) / f"concentration_{sp}.npy"))
         self.rivers = None  # built on the first day, once MODFLOW 6's river package has its entries
         if cfg.rivers and cfg.rivers.get("stage", "fixed") not in ("fixed", "surface_depth", "nextgen_depth"):
             raise ValueError("[rivers] stage must be fixed or surface_depth")
@@ -209,6 +222,22 @@ class Basin:
                         self.router.check(route)
                 k = f"user:{u.name}:"
                 L.pair(k + "withdrawal", [k + "consumption", k + "return", k + "storage_less_gain"])
+        # intakes from the aquifer: each user on a configured well, for each species its component takes
+        self.intakes = []  # (user, WaterUser, input variable, species, node)
+        for u, wu in self.users:
+            k, name = kind(u.withdrawal)
+            if k != "well":
+                continue
+            takes = set(wu.bmi.get_input_var_names())
+            for sp in self.transport:
+                var = f"water_user_intake_water_{sp}__mass_concentration"
+                if var not in takes:
+                    continue
+                if var in (u.inputs or {}):
+                    raise ValueError(f"user {u.name}: {var} is set from the aquifer ([transport.{sp}]); "
+                                     "remove its constant input")
+                self.intakes.append((u.name, wu, var, sp, wells[name][1]))
+        self._set_intakes()
         users_by_name = {u.name: wu for u, wu in self.users}
         self.rules = []
         for r in cfg.rules:
@@ -319,6 +348,89 @@ class Basin:
             return AreaMap.all_cells(aquifers, spec[4:], nodes, self.mf6.cell_area)
         return AreaMap.from_csv(self.cfg.folder / spec, aquifers, self.mf6.node)
 
+    def _transport_models(self, cfg: C.ExampleConfig) -> dict:
+        """The configured species' transport models, and a check that the simulation has no others: a transport
+        model the driver doesn't know would be solved with its files' concentrations and its mass left out."""
+        from .coupling.transport import Transport
+        names = set(self.mf6.api.get_input_var_names()) | set(self.mf6.api.get_output_var_names())
+        found = {n.split("/")[0] for n in names if n.endswith("/SSM/IAUXPAK")}
+        out = {sp: Transport(self.mf6, sp, t.get("model")) for sp, t in cfg.transport.items()}
+        extra = found - {t.model for t in out.values()}
+        if extra:
+            raise ValueError(f"MODFLOW 6 has transport models with no [transport] section: {sorted(extra)}")
+        return out
+
+    def _set_intakes(self):
+        """Each intake user's concentration for the coming day: the aquifer's at its well now."""
+        self.intake = {}
+        x = {sp: t.concentration() for sp, t in self.transport.items()}
+        for user, wu, var, sp, node in self.intakes:
+            c = float(x[sp][node])
+            wu.inputs[var] = (lambda value: (lambda t: value))(c)
+            self.intake[(user, sp)] = c
+
+    def _transport_day(self):
+        """The day's inflow concentrations, after MODFLOW 6 prepares the day [A]. The couplings are found on the first
+        day, once the packages have their entries."""
+        if not hasattr(self, "_mass_links"):
+            rp = self.cfg.recharge_package
+            wells = {w.name: (w.package, self.mf6.entry(w.package, self.mf6.node(*w.cell))) for w in self.cfg.wells}
+            streams = []
+            if self.exchange is not None:
+                streams.append((self.exchange.package, self.exchange.map.entry_channel, self.exchange.map.channels))
+                if self.exchange.drains is not None:
+                    dp, dmap = self.exchange.drains
+                    streams.append((dp, dmap.entry_channel, dmap.channels))
+            for sp, t in self.transport.items():
+                if not t.takes_inflow(rp):
+                    raise ValueError(f"{t.model.lower()}: the recharge package {rp!r} isn't an AUX source in SSM "
+                                     "(add_transport's sources)")
+                if self.exchange is not None and not t.takes_inflow(self.exchange.package):
+                    raise ValueError(f"{t.model.lower()}: the coupled river package {self.exchange.package!r} isn't an "
+                                     "AUX source in SSM, so its losses would carry nothing")
+            self._mass_links = (rp, wells, streams)
+            L = self.ledger
+            for sp in self.transport:
+                k = f"transport:{sp}:"
+                L.pair(k + "recharge:sent", k + "recharge:received")
+                for c in (self.exchange.map.channels if self.exchange is not None else []):
+                    L.pair(k + f"stream:{c}:leakage_sent", k + f"stream:{c}:leakage_received")
+                L.zero(k + "closure_share", atol=1e-6)
+        rp, _, streams = self._mass_links
+        for sp, t in self.transport.items():
+            t.set_inflow(rp, float(self.cfg.transport[sp]["recharge"]))
+            if self.exchange is not None:
+                t.set_inflow(self.exchange.package, float(self.cfg.transport[sp]["stream"]),
+                             entries=self.exchange.map.entry_channel >= 0)
+
+    def _transport_accounts(self, L):
+        """Each species' mass for the day, kg: in with recharge (as sent: the stated concentration times the volume
+        sent; as received: what the transport model took in), out with each well, to and from each coupled channel,
+        across the boundaries not coupled (net, positive into the aquifer), the release from storage, and the
+        closure share, checked every day. Then the wells' concentrations, for tomorrow's intakes."""
+        rp, wells, streams = self._mass_links
+        for sp, t in self.transport.items():
+            b = t.budget(rp, wells, streams)
+            x = t.concentration()
+            k = f"transport:{sp}:"
+            L.enter(k + "recharge:sent", float(self.cfg.transport[sp]["recharge"]) * L.today("recharge:sent"))
+            L.enter(k + "recharge:received", b.recharge)
+            for w, m in b.wells.items():
+                L.enter(k + f"well:{w}:withdrawn", m)
+                L.enter(k + f"well:{w}:concentration", float(x[self.mf6.node(*self._well_cell(w))]))
+            for c in b.to_stream:
+                L.enter(k + f"stream:{c}:to_stream", b.to_stream[c])
+                L.enter(k + f"stream:{c}:leakage_received", b.from_stream[c])
+                L.enter(k + f"stream:{c}:leakage_sent", float(self.cfg.transport[sp]["stream"]) * b.leakage_m3[c])
+            for p, m in b.boundary.items():
+                L.enter(k + f"boundary:{p}", m)
+            L.enter(k + "storage_release", b.storage_release)
+            L.enter(k + "closure_share", b.closure_share)
+        self._set_intakes()
+
+    def _well_cell(self, name: str):
+        return next(w.cell for w in self.cfg.wells if w.name == name)
+
     # ---------- one day ----------
     def _state(self) -> R.State:
         q = self.sw.get(S.QOUT)
@@ -360,6 +472,10 @@ class Basin:
             L.enter(k + "return", use.returned)
             for c, kg in use.constituents.items():
                 L.enter(k + f"{c}:kg", kg)
+            for sp in self.transport:  # the intake from the aquifer: its concentration and the mass it brought in
+                if (u.name, sp) in self.intake:
+                    L.enter(k + f"intake:{sp}", self.intake[(u.name, sp)])
+                    L.enter(k + f"intake:{sp}:kg", use.withdrawal * self.intake[(u.name, sp)])
             if use.energy is not None:
                 L.enter(k + "MWh", use.energy)
             for name, v in use.reported.items():
@@ -423,6 +539,8 @@ class Basin:
                 drains = (dp, ChannelMap.from_spec(ex["drains"]["map"], self.cfg.folder, self.mf6, dp, names,
                                                    channels=list(self.due)))
             self.exchange = StreamExchange(self.mf6, ex.get("package", "riv"), cmap, drains)
+        if self.transport:
+            self._transport_day()
         sent = self.recharge.transfer()
         L.enter("recharge:sent", sent)
         L.enter("recharge:made", self.recharge.made)
@@ -454,6 +572,8 @@ class Basin:
             self._enter_exchange(L)
             L.enter("swatplus:aquifer_outflow", float(self.sw.get(S.AQU_OUT).sum()) * DAY)
         self._groundwater_accounts(L)
+        if self.transport:
+            self._transport_accounts(L)
 
     def _groundwater_accounts(self, L):
         """Every flow in or out of the groundwater model that no link carries, by package (water from or to outside
@@ -534,6 +654,8 @@ class Basin:
         self.swat.save_state(str(folder / "surface"))
         if self.mf6 is not None:
             np.save(folder / "heads.npy", self.mf6.head())
+            for sp, t in self.transport.items():
+                np.save(folder / f"concentration_{sp}.npy", t.concentration())
         (folder / "basin.json").write_text(json.dumps({
             "day": self.day, "ledger": self.ledger.state(), "series": self.series,
             "rule_memory": self.rule_memory,
@@ -545,7 +667,8 @@ class Basin:
         return [(self.start + dt.timedelta(days=i)).isoformat() for i in range(self.ledger.days)]
 
     def write_outputs(self, folder: str | Path | None = None) -> Path:
-        """ledger.csv (every account, m3 per day unless named otherwise), series.csv (flows m3 s-1, heads m) and
+        """ledger.csv (every account, m3 per day unless named otherwise; ``transport:`` accounts in kg, and
+        concentrations in kg m-3), series.csv (flows m3 s-1, heads m) and
         summary.json (status, totals, what's in transit)."""
         out = Path(folder) if folder else self.folder / "outputs"
         out.mkdir(parents=True, exist_ok=True)

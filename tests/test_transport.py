@@ -4,7 +4,9 @@ the intake it gives a well's user.
 - the builder: the transport model, its own solution, the exchange, and the auxiliary variables it adds;
 - mass closes every day, with recharge, a well, a river that gains and loses, drains and sorption (tier 1 and 2);
 - a steady flow under recharge of one concentration ends with that concentration everywhere (tier 3);
-- a one-dimensional column against Ogata and Banks (1961) (tier 3).
+- a one-dimensional column against Ogata and Banks (1961) (tier 3);
+- the coupled synthetic run (examples/synthetic/transport.toml): the ledger, and the user's intake following the
+  aquifer's concentration at its well a day later (tier 2).
 """
 
 from __future__ import annotations
@@ -217,3 +219,106 @@ def test_column_matches_ogata_banks(libmf6):
     print({d: round(e, 4) for d, e in errors.items()})
     assert max(errors.values()) < OB_TOL
 
+
+# ---------- the coupled synthetic run (SWAT+ two-way) ----------
+
+TRANSPORT = ROOT / "examples" / "synthetic" / "transport.toml"
+
+
+def transport_config():
+    from basinledger import config as C
+    cfg = C.load(TRANSPORT)
+    cfg.run_folder = RUNS
+    return cfg
+
+
+@pytest.fixture(scope="module")
+def coupled(swatplus):
+    from basinledger.driver import Basin
+    b = Basin(transport_config(), run="transport", days=730)
+    b.run()
+    t = b.ledger.table()
+    b.finalize()
+    return t
+
+
+@pytest.mark.slow
+def test_coupled_mass_ledger(coupled):
+    t = coupled
+    k = "transport:chloride:"
+    assert (np.abs(t[k + "closure_share"]) < 1e-9).all()
+    np.testing.assert_allclose(t[k + "recharge:received"], t[k + "recharge:sent"], rtol=1e-9, atol=1e-12)
+    np.testing.assert_allclose(t[k + "recharge:sent"], 0.03 * t["recharge:sent"], rtol=1e-12)
+    lost = t[k + "stream:cha01:leakage_received"]
+    assert (lost > 0).sum() > 10 and (t[k + "stream:cha01:to_stream"] > 0).sum() > 100  # the river loses and gains
+    # the run's mass, from the accounts: in, less out, plus the release from storage, is zero
+    total = (t[k + "recharge:received"] + lost - t[k + "stream:cha01:to_stream"] - t[k + "well:pw1:withdrawn"]
+             + t[k + "storage_release"]).sum()
+    assert abs(total) < 1e-9 * t[k + "recharge:received"].sum()
+    assert not any(a.startswith(k + "boundary:") for a in t)
+
+
+@pytest.mark.slow
+def test_intake_follows_the_aquifer_a_day_later(coupled):
+    t = coupled
+    c_well = t["transport:chloride:well:pw1:concentration"]
+    intake = t["user:plant:intake:chloride"]
+    assert intake[0] == pytest.approx(0.01, rel=1e-12)       # the starting concentration on the first day
+    np.testing.assert_array_equal(intake[1:], c_well[:-1])    # then the aquifer's at the end of the day before
+    assert c_well[-1] > c_well[0] * 1.05                       # recharge at 0.03 raises the aquifer's
+    # the user takes in the well's water at that concentration, and returns all of it (the synthetic user)
+    w = t["user:plant:withdrawal"]
+    np.testing.assert_allclose(t["user:plant:intake:chloride:kg"], w * intake, rtol=1e-12)
+    np.testing.assert_allclose(t["user:plant:chloride:kg"], t["user:plant:intake:chloride:kg"], rtol=1e-9)
+    # what the well removed and what the user took in differ only by the day's lag
+    removed, taken = t["transport:chloride:well:pw1:withdrawn"].sum(), t["user:plant:intake:chloride:kg"].sum()
+    assert removed == pytest.approx(taken, rel=1e-3)
+    np.testing.assert_allclose(t["transport:chloride:well:pw1:withdrawn"], t["route:well:pw1:delivered"] * c_well,
+                               rtol=1e-9)
+
+
+@pytest.mark.slow
+def test_restart_carries_the_concentrations(swatplus):
+    from basinledger.driver import Basin
+    n, k = 200, 80
+    a = Basin(transport_config(), run="transport-unbroken", days=n)
+    a.run()
+    ta = a.ledger.table()
+    a.finalize()
+    w = Basin(transport_config(), run="transport-warm", days=n)
+    w.run(k)
+    w.save(RUNS / "transport-state")
+    w.finalize()
+    b = Basin(transport_config(), run="transport-restarted", days=n, restart=RUNS / "transport-state")
+    b.run()
+    tb = b.ledger.table()
+    b.finalize()
+    for acct in ("transport:chloride:well:pw1:concentration", "user:plant:intake:chloride",
+                 "transport:chloride:storage_release"):
+        np.testing.assert_array_equal(tb[acct], ta[acct])
+
+
+def test_settings_checked_at_start_up(tmp_path):
+    from basinledger import config as C
+    text = TRANSPORT.read_text()
+    bad = tmp_path / "bad.toml"
+    bad.write_text(text.replace("stream = 0.02             # kg m-3 [A]\n", ""))
+    with pytest.raises(ValueError, match="needs stream"):
+        C.load(bad)
+    bad.write_text(text.replace("recharge = 0.03", "recharg = 0.03"))
+    with pytest.raises(ValueError, match="needs recharge"):
+        C.load(bad)
+
+
+@pytest.mark.slow
+def test_driver_refuses_what_it_cannot_book(swatplus):
+    """A transport model with no [transport] section, and a constant intake the aquifer would replace."""
+    from basinledger.driver import Basin
+    cfg = transport_config()
+    cfg.transport = {}
+    with pytest.raises(ValueError, match="no \\[transport\\] section"):
+        Basin(cfg, run="transport-unbooked", days=5)
+    cfg = transport_config()
+    cfg.users[0].inputs = {"water_user_intake_water_chloride__mass_concentration": 0.012}
+    with pytest.raises(ValueError, match="set from the aquifer"):
+        Basin(cfg, run="transport-constant-intake", days=5)

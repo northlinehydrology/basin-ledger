@@ -41,6 +41,11 @@ Paths are relative to the config file. ``{swatplus_refdata}`` stands for the exa
     limit = true                        # a losing reach takes no more than its channel carries (default)
     drains = {package = "drn", map = "maps/drains.csv"}   # optional: seepage cells, to their channels the next day
 
+    [transport.chloride]                # optional: a MODFLOW 6 transport model per species (coupling/transport.py),
+    recharge = 0.02                     #   built by the example's builder (add_transport); kg m-3 of recharge [A]
+    stream = 0.03                       #   kg m-3 of water a coupled river loses to the aquifer [A] (with [exchange])
+    # model = "gwt_chloride"            #   the GWT model's name, if not gwt_<species>
+
     [rivers]                            # optional: MODFLOW 6 river cells by flowpath, for stage and base flow out
     package = "riv"
     map = "maps/river_cells.csv"        # object (flowpath or channel), layer, row, col
@@ -158,6 +163,7 @@ class ExampleConfig:
     nextgen_run: Path | None = None
     rivers: dict | None = None
     mf6_builder_args: dict = field(default_factory=dict)
+    transport: dict[str, dict] = field(default_factory=dict)  # species -> recharge, stream (kg m-3) [A], model
 
     @property
     def surface(self) -> str:
@@ -198,7 +204,7 @@ def load(path: str | Path) -> ExampleConfig:
         c = tomllib.load(f)
     base = path.parent
     known = {"name", "description", "run", "swatplus", "modflow6", "recharge", "wells", "users", "calibration",
-             "exchange", "utilities", "rules", "outputs", "nextgen", "rivers"}
+             "exchange", "utilities", "rules", "outputs", "nextgen", "rivers", "transport"}
     if set(c) - known:
         raise ValueError(f"{path}: unknown sections {sorted(set(c) - known)}")
     mf = c.get("modflow6", {})
@@ -208,6 +214,16 @@ def load(path: str | Path) -> ExampleConfig:
         raise ValueError(f"{path}: needs one surface model, [swatplus] or [nextgen]")
     sw = c.get("swatplus", {})
     rch = c.get("recharge", {})
+    transport = c.get("transport", {})
+    for sp, t in transport.items():
+        if not isinstance(t, dict) or "recharge" not in t:
+            raise ValueError(f"{path}: [transport.{sp}] needs recharge (kg m-3)")
+        if set(t) - {"recharge", "stream", "model"}:
+            raise ValueError(f"{path}: [transport.{sp}] unknown settings {sorted(set(t) - {'recharge', 'stream'})}")
+        if "stream" in t and "exchange" not in c:
+            raise ValueError(f"{path}: [transport.{sp}] stream needs the two-way [exchange]")
+        if "exchange" in c and "stream" not in t:
+            raise ValueError(f"{path}: [transport.{sp}] needs stream (kg m-3): the coupled rivers' losses carry it")
     users = []
     for u in c.get("users", []):
         users.append(UserConfig(
@@ -239,4 +255,5 @@ def load(path: str | Path) -> ExampleConfig:
         nextgen_run=_path(base, c["nextgen"]["run"]) if "nextgen" in c else None,
         rivers=c.get("rivers"),
         mf6_builder_args=mf.get("builder_args", {}),
+        transport={sp: dict(t) for sp, t in transport.items()},
     )
