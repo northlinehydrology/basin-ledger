@@ -101,6 +101,7 @@ def test_what_a_cap_costs_the_campus(swatplus, tmp_path):
     free, cap = out[False], out[True]
     assert np.nansum(free["user:campus:unremoved_heat_MWh"]) == 0
     assert np.nansum(cap["user:campus:unremoved_heat_MWh"]) > 0
-    assert np.nansum(cap["user:campus:setpoint_lost_h"]) > 0
+    lost = cap["user:campus:setpoint_lost_h"]
+    assert np.nansum(lost) > 0 and np.nanmax(lost) <= 24.0  # hours a day, at most every hour of it
     assert np.nansum(cap["user:campus:withdrawal"]) < np.nansum(free["user:campus:withdrawal"])
     assert np.nansum(cap["rule:cap:active"]) == 239  # from the second day
