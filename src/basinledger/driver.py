@@ -283,17 +283,28 @@ class Basin:
             self.series[f"baseflow:{c}"].append(-float(q[cmap.entry_channel == i].sum()) / DAY)
 
     def _forcing(self, u: C.UserConfig, comp) -> dict:
-        """Hourly weather inputs for a user, from its forcing source, for the inputs its component takes."""
-        if not u.forcing:
-            return {}
-        if u.forcing.get("source") != "nextgen" or self.cfg.surface != "nextgen":
-            raise NotImplementedError(f"user {u.name}: forcing from {u.forcing.get('source')!r} (only NextGen's own "
-                                      "forcing so far; AORC is planned)")
-        from .forcing import nextgen_inputs
-        start = dt.datetime.combine(self.start, dt.time())
-        series = nextgen_inputs(self.cfg.nextgen_run, u.forcing["catchment"], start)
+        """Hourly weather inputs for a user, from its forcing source, for the inputs its component takes, and its
+        constant inputs."""
         takes = set(comp.get_input_var_names())
-        return {k: v for k, v in series.items() if k in takes}
+        out = {}
+        if u.forcing:
+            start = dt.datetime.combine(self.start, dt.time())
+            src = u.forcing.get("source")
+            if src == "nextgen" and self.cfg.surface == "nextgen":
+                from .forcing import nextgen_inputs
+                series = nextgen_inputs(self.cfg.nextgen_run, u.forcing["catchment"], start)
+            elif src == "swatplus" and self.cfg.surface == "swatplus":
+                from .forcing import swatplus_inputs
+                series = swatplus_inputs(self.folder / "swatplus", u.forcing["station"], start)
+            else:
+                raise NotImplementedError(f"user {u.name}: forcing from {src!r} with a {self.cfg.surface} surface "
+                                          "model (nextgen with NextGen, swatplus with SWAT+; AORC is planned)")
+            out.update({k: v for k, v in series.items() if k in takes})
+        for k, v in (u.inputs or {}).items():
+            if k not in takes:
+                raise KeyError(f"user {u.name}: {k!r} is not an input of {u.component}")
+            out[k] = (lambda value: (lambda t: value))(float(v))
+        return out
 
     def _area_map(self, spec: str, aquifers: list[str]) -> AreaMap:
         if spec.startswith("all:"):

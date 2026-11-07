@@ -76,6 +76,8 @@ Paths are relative to the config file. ``{swatplus_refdata}`` stands for the exa
     return = "outfall:creek"            # sink: an outfall account (later: a SWAT+ point source, a sewer)
     # variables = {withdrawal = "...", gain = "..."}   for components without the common names
     # forcing = {source = "nextgen", catchment = "cat-652059"}   hourly weather inputs (forcing.py)
+    # forcing = {source = "swatplus", station = "sta035"}         or from a SWAT+ station's daily files
+    # inputs = {water_user_intake_water_chloride__mass_concentration = 0.012}   constant inputs [A]
 
 Routes also include ``offsite:<name>``: water from or to somewhere outside the basin (a Great Lakes intake, a plant on
 another river), entered in the ledger only.
@@ -118,6 +120,7 @@ class UserConfig:
     variables: dict = field(default_factory=dict)
     constituents: dict | None = None
     forcing: dict | None = None
+    inputs: dict = field(default_factory=dict)   # constant inputs, e.g. intake concentrations [A]
 
 
 @dataclass
@@ -209,7 +212,8 @@ def load(path: str | Path) -> ExampleConfig:
             name=u["name"], component=u["component"],
             config=_path(base, u["config"]) if u.get("config") else None,
             withdrawal=u["withdrawal"], returns=u["return"],
-            variables=u.get("variables", {}), constituents=u.get("constituents"), forcing=u.get("forcing")))
+            variables=u.get("variables", {}), constituents=u.get("constituents"), forcing=u.get("forcing"),
+            inputs=u.get("inputs", {})))
     return ExampleConfig(
         path=path, name=c["name"], description=c.get("description", ""),
         run_folder=_path(base, c.get("run", {}).get("folder", f"runs/{c['name']}")),
