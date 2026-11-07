@@ -54,16 +54,24 @@ not the basin.
 | recharge, one-way | yes | yes | yes | MODFLOW 6 budget | pass-through storage | Clam |
 | two-way exchange, supply limit, drains | yes | yes | yes | MODFLOW 6 budget | settings | Clam |
 | boundary flows, storage, closure | | yes | yes | | | Clam |
-| wells and capture of pumping | | yes | yes (draws down, depletes) | **gap: G2** | | **gap: G1** |
-| water users (CoolingWaterBmi) | yes | yes | yes | user balance | | **gap: G1** |
-| return water to a stream, and its loads | | yes (volume) | yes (volume) | | | **gap: G6** |
-| rules | yes | | yes (one-way) | | | **gap: G1** |
+| wells and capture of pumping | | yes | yes (G1, two-way and one-way) | Glover and Balmer (G2) | | Clam |
+| water users (CoolingWaterBmi) on SWAT+'s weather | yes | yes | yes (G7) | user balance | | Clam |
+| return water to a stream, and its loads | yes (G6) | yes | yes (G6, G7) | | | Clam |
+| rules | yes | | yes (one-way) | | | Clam |
 | utility chain | yes | yes | yes | | | |
 | restarts | | | yes (bit for bit) | | | |
-| scenarios from a shared warm-up | | | **gap: G5** | | | **gap: G5** |
-| stream temperature | yes (energy closes) | | **gap: G4** | energy | | **gap: G4** |
-| whole-basin balance | | | **gap: G3** | | | Clam (study code) |
+| scenarios from a shared warm-up | | | yes (G5) | | | Clam |
+| stream temperature | yes (energy closes) | | yes (G4) | energy | | Clam |
+| whole-basin balance | | | yes (G3) | | | Clam |
 | NextGen replay | yes | yes | yes | | | Plaster Creek |
+
+Built Nov 6, 2026 (G1 to G7; G7, water users on SWAT+'s weather, was found while building G6). What they turned up:
+- SWAT+ 62.0.1 reads `print.prt`'s object rows by position unless `use_obj_labels` is on, and Osu_1hru's rows are out
+  of the reader's order: Basin Ledger now switches labels on when it edits the print settings.
+- Osu_1hru irrigates and has a point source into its channel, both water from outside, now in the balance.
+- `ch_temp`'s single explicit heat-exchange step overshoots the equilibrium temperature on a long reach (Osu_1hru's
+  channel reached 90 C); the heat balance integrates it exactly.
+- MODFLOW 6 through the coupling's wrapper matches Glover and Balmer within 0.5% of the pumping from day 10.
 
 The gaps, each to be built with its test:
 
