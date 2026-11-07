@@ -498,6 +498,28 @@ Settings the coupling needs, checked when a run starts:
   not coupled are reported as boundary flows.
 - **Water users (Water Ledger's models):** to be listed with the first coupled user in a real example.
 
+## Stream temperature: a reach heat balance (built Nov 6, 2026)
+
+SWAT+ 62.0.1's `ch_temp.f90` can't give a stream temperature that responds to groundwater: no aquifer routine fills
+the groundwater term it reads (`hdsep%flo_gwsw`), so aquifer return flow and a gain set through swatplus-bmi both mix
+in at the transfer hydrograph's temperature, and it mixes HRU water yields in mm with flows in m3/s. Andrew's choice
+(Nov 6): a small Basin Ledger component, `temperature.py`, run after a coupled run.
+
+- **Each reach, each day, upstream first:** the water entering is mixed by volume, each source at its temperature
+  [A]: upstream reaches at theirs; lakes at `5 + 0.75 x` air temperature (SWAT+'s value for an inflow that isn't a
+  channel); runoff, lateral flow and snowmelt at `ch_temp`'s lagged air temperatures; groundwater from MODFLOW 6
+  (the ledger's applied exchange, where positive) at a stated temperature, by default the station's mean annual air
+  temperature over the run.
+- **Heat exchange with the air** over the reach's travel time, by `ch_temp`'s equilibrium-temperature method
+  (Edinger and others 1974) and coefficients [A], with a Manning velocity at the Fuller and Peck peak rate [A].
+- **Energy closes:** `reach_heat_balance` returns the heat the sources bring, the heat exchanged (surface flux x
+  the parcel's surface x travel time) and the heat leaving, plus what the 0.001 C floor adds (ice isn't modelled);
+  `tests/test_temperature.py` holds them equal.
+- **Dew point:** `tave - (100 - RH%) / 5` (Lawrence 2005). SWAT+'s `tave - (1 - rhum) / 5` takes RH as a fraction;
+  `ch_temp`'s coefficients were set with it, which is one reason the coefficients need checking against measured
+  temperature in each example.
+- An example asks for it with `[outputs] temperature = true`: SWAT+ then prints `lsunit_wb` daily in the run's copy.
+
 ## Calibration
 
 Using Basin Ledger depends on calibrated models. Calibration is part of every example, not something a study adds
