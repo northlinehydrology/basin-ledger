@@ -63,6 +63,7 @@ Paths are relative to the config file. ``{swatplus_refdata}`` stands for the exa
     channels = ["cha01"]                # outflow, m3 s-1 (default: every channel)
     heads = [{name = "pw1", cell = [0, 20, 28]}]
     temperature = true                  # SWAT+ prints what the reach heat balance needs (temperature.py)
+    balance = "cha01"                   # the outlet: SWAT+ prints what the whole-basin balance needs (balance.py)
 
     [calibration]                       # optional: the example's calibration record
     record = "calibration/record.toml"  # without one, the example is a screening run

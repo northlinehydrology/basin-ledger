@@ -55,9 +55,23 @@ class Coefficients:
 
 
 def print_daily(project: Path, objects: list[str]):
-    """Switch SWAT+'s daily print on for the given objects (``print.prt`` rows, e.g. ``lsunit_wb``)."""
+    """Switch SWAT+'s daily print on for the given objects (``print.prt`` rows, e.g. ``lsunit_wb``), from the first
+    day: ``nyskip`` (years not printed) is set to 0, since a balance or a heat balance needs every day, and the rows
+    are read by their labels."""
     path = Path(project) / "print.prt"
     lines = path.read_text().splitlines()
+    f = lines[2].split()
+    if f and f[0] != "0":
+        lines[2] = "  ".join(["0"] + f[1:])
+    # SWAT+ 62.0.1 reads the object rows by position unless use_obj_labels (the csvout line's second flag) is y
+    # (basin_print_codes_read.f90); by label, a row edited by its name is the row SWAT+ applies
+    for i, ln in enumerate(lines[:-1]):
+        if ln.split()[:1] == ["csvout"]:
+            v = lines[i + 1].split()
+            if len(v) >= 2 and v[1] != "y":
+                v[1] = "y"
+                lines[i + 1] = "  ".join(v)
+            break
     for i, ln in enumerate(lines):
         f = ln.split()
         if f and f[0] in objects and len(f) == 5:

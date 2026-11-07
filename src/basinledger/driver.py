@@ -86,9 +86,11 @@ class Basin:
             if ex:
                 S.aquifer_pass_through(swat_dir)
                 S.no_transmission_loss(swat_dir)
+            from .temperature import print_daily
             if cfg.outputs.get("temperature"):  # the reach heat balance reads the routing units' daily water
-                from .temperature import print_daily
                 print_daily(swat_dir, ["lsunit_wb"])
+            if cfg.outputs.get("balance"):      # the whole-basin balance reads SWAT+'s daily land budget
+                print_daily(swat_dir, ["basin_wb", "channel_sd", "reservoir"])
             if prepare:
                 prepare("swatplus", swat_dir)
             problems = S.coupling_problems(swat_dir, two_way=bool(ex))
