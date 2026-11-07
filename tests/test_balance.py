@@ -27,7 +27,7 @@ def test_the_whole_basin_closes(swatplus):
     # SWAT+'s own land budget: Osu_1hru's HRU has a wetland whose storage basin_wb doesn't break out (1.4% of
     # precipitation and irrigation when written, Nov 6, 2026)
     assert abs(r["land_residual"]) <= 0.02 * (p + r["irrigation"])
-    assert r["inflow_from_elsewhere"] >= -1e-6 * r["outflow"]
+    assert abs(r["inflow_from_elsewhere"]) <= 0.001 * r["outflow"]   # Osu_1hru has none; SWAT+ prints rounded flows
     assert abs(r["groundwater_residual"]) <= 1e-6 * r["recharge_received"]
     assert r["recharge_made"] == pytest.approx(r["recharge_received"], rel=1e-6)
     assert abs(r["channels_residual"]) <= 0.001 * r["outflow"]          # channel storage isn't printed

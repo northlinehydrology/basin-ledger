@@ -9,16 +9,18 @@ Over the area the surface model covers:
 - **the link** (the ledger): what SWAT+'s aquifers recharged, what MODFLOW 6 received, and what the map added;
 - **groundwater** (the ledger): recharge + boundary inflow + release from storage = discharge to the coupled streams
   + pumping, which closes by MODFLOW 6's budget;
-- **channels and lakes**: runoff + groundwater SWAT+'s channels received (the exchange as applied) + precipitation on
-  lakes and channels (their daily files when printed, else the average annual ones) + water users' returns to the streams + inflow from elsewhere = evaporation from lakes and
-  channels + withdrawals from the streams + outflow at the outlet + a residual. Inflow from elsewhere is what SWAT+'s
-  channels report taking in beyond their upstream channels, the lakes' releases, the land's runoff, the groundwater
-  and Basin Ledger's returns: the project's own point sources (recall objects), for one, which are water from
-  outside; which includes the change in channel and lake storage (SWAT+
-  doesn't print it). Lakes' and channels' precipitation and evaporation come from their average annual files times
-  the run's years.
+- **channels and lakes**: runoff + groundwater SWAT+'s channels received (the exchange as applied, gains less
+  losses) + precipitation on lakes and channels + water users' returns to the streams + inflow from elsewhere =
+  evaporation from lakes and channels + withdrawals from the streams + outflow at the outlet + the gain in lake and
+  channel storage + a residual. Precipitation, evaporation and storage come from the lakes' and channels' daily
+  files (else the average annual ones times the run's years, with no storage term). Inflow from elsewhere is what
+  SWAT+'s channels report taking in beyond their upstream channels, the lakes' releases, the land's runoff, the
+  groundwater they gained and Basin Ledger's returns: the project's own point sources (recall objects), for one,
+  which are water from outside. A channel's loss to the aquifer comes out of its outflow after routing (SWAT+'s
+  seepage), not its inflow.
 
-An example asks for it with ``[outputs] balance = "<outlet channel>"``: SWAT+ then prints ``basin_wb`` daily.
+An example asks for it with ``[outputs] balance = "<outlet channel>"``: SWAT+ then prints ``basin_wb``,
+``channel_sd`` and ``reservoir`` daily.
 """
 
 from __future__ import annotations
@@ -105,11 +107,28 @@ def basin_balance(run: str | Path, outlet: str) -> dict[str, float]:
                           - b["soil_water_gain"] - b["snow_gain"])
     b["groundwater_residual"] = (b["recharge_received"] + b["groundwater_boundary_in"]
                                  + b["groundwater_storage_release"] - b["groundwater_to_streams"] - b["pumping"])
-    b["channels_residual"] = (b["runoff_to_channels"] + b["groundwater_into_channels"] + b["precipitation_lakes"]
+    b["lake_storage_gain"] = _storage_gain(sw / "reservoir_day.txt")
+    b["channel_storage_gain"] = _storage_gain(sw / "channel_sd_day.txt")
+    b["channels_residual"] = (- b["lake_storage_gain"] - b["channel_storage_gain"]
+                              + b["runoff_to_channels"] + b["groundwater_into_channels"] + b["precipitation_lakes"]
                               + b["precipitation_channels"] + b["returns_to_streams"]
                               + b["inflow_from_elsewhere"] - b["evaporation_lakes"]
                               - b["evaporation_channels"] - b["withdrawals_from_streams"] - b["outflow"])
     return b
+
+
+def _storage_gain(path: Path) -> float:
+    """The change in storage (``flo_stor``, m3) over the run, summed over the objects of a SWAT+ daily file: each
+    object's last day less its first (the first day's start isn't printed) [A]."""
+    if not path.exists():
+        return 0.0
+    head, rows = _table(path)
+    i, n = head.index("flo_stor"), head.index("name")
+    first, last = {}, {}
+    for r in rows:
+        first.setdefault(r[n], float(r[i]))
+        last[r[n]] = float(r[i])
+    return sum(last[k] - first[k] for k in last)
 
 
 def _daily_sum(path: Path, column: str, otherwise: float) -> float:
@@ -146,7 +165,10 @@ def _other_inflow(sw: Path, t: dict) -> float:
         h2, r2 = _table(rp)
         j_name, j_out = h2.index("name"), h2.index("flo_out")
         from_lakes = sum(float(r[j_out]) for r in r2 if down.get(r[j_name], "").startswith("cha"))
-    gw = float(np.nansum(_sum(t, "exchange:", ":applied")))
+    # a channel's inflow holds the groundwater it gained; a loss comes out of its outflow after routing (SWAT+'s
+    # seepage), so only the gains come off here
+    gw = float(sum(np.nansum(np.clip(v, 0.0, None)) for k, v in t.items()
+                   if k.startswith("exchange:") and k.endswith(":applied")))
     returns = float(np.nansum(_sum(t, "route:swat:point_source:", ":delivered")))
     wb_head, wb = _table(sw / "basin_wb_day.txt")
     lsu = sum(float(r[2]) for r in _table_skip(sw / "ls_unit.def")) * 1e4
