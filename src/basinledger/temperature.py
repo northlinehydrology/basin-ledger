@@ -11,7 +11,8 @@ Each reach, each day, upstream first:
    Kurylyk and others 2014, to check). SWAT+'s own ``ch_temp`` can't do this step: no aquifer routine fills the
    groundwater term it reads (``hdsep%flo_gwsw``), and it mixes HRU water yields in mm with flows in m3/s.
 2. **Heat exchange with the air** over the reach's travel time, by ``ch_temp``'s equilibrium-temperature method
-   (Edinger and others 1974) and coefficients [A]: the exchange coefficient from wind and temperature, the
+   (Edinger and others 1974) and coefficients [A], integrated exactly (an exponential approach to the equilibrium
+   temperature) where ``ch_temp`` takes one explicit step that overshoots it on long reaches: the exchange coefficient from wind and temperature, the
    equilibrium temperature from solar and long-wave radiation and the dew point, the flow's depth from the channel's
    geometry and ``hex_coef2``, travel time from the reach length and a Manning velocity at the Fuller and Peck peak
    rate (SWAT+ takes it from its rating curve, which swatplus-bmi doesn't expose) [A]. The dew point is
@@ -51,6 +52,7 @@ class Coefficients:
     pk_rto: float = 1.0           # SWAT+'s peak rate ratio (sd_ch%pk_rto) [A]
     swat_dew_point: bool = False
     heat_exchange: bool = True    # off: the mixed temperature only, for checks
+    humidity_if_generated: float = 0.7  # relative humidity (fraction) where SWAT+ generates it [A]
     seepage_as_runoff: bool = True  # drains' seepage reaches the stream over land, at the runoff's temperature [A]
 
 
@@ -88,15 +90,23 @@ def _rows(path: Path, skip: int = 1):
     return head, rows
 
 
-def _weather(swat: Path, name: str) -> dict:
+def _weather(swat: Path, name: str, humidity_if_generated: float) -> dict:
     """A station's daily series, keyed by date: tmax, tmin, solar (MJ/m2), relative humidity (fraction), wind (m/s),
-    and its latitude."""
-    out = {}
-    lat = None
+    from the files ``weather-sta.cli`` names, and its latitude. A variable SWAT+ generates (``sim``) has no series:
+    humidity then takes ``humidity_if_generated`` [A]; the others are needed."""
+    lines = (swat / "weather-sta.cli").read_text().splitlines()
+    head = lines[1].split()
+    files = dict(zip(head, next(ln.split() for ln in lines[2:] if ln.split() and ln.split()[0] == name)))
+    out, lat = {}, None
     for kind, cols in (("tmp", ("tmax", "tmin")), ("slr", ("slr",)), ("hmd", ("hmd",)), ("wnd", ("wnd",))):
-        lines = (swat / f"{name}.{kind}").read_text().splitlines()
-        lat = float(lines[2].split()[2])
-        for ln in lines[3:]:
+        fname = files.get(kind, "sim")
+        if fname in ("sim", "null"):
+            if kind != "hmd":
+                raise ValueError(f"station {name!r}: SWAT+ generates its {kind}; the heat balance needs a series")
+            continue
+        flines = (swat / fname).read_text().splitlines()
+        lat = float(flines[2].split()[2])
+        for ln in flines[3:]:
             f = ln.split()
             if not f:
                 continue
@@ -104,6 +114,8 @@ def _weather(swat: Path, name: str) -> dict:
             rec = out.setdefault(d, {})
             for c, v in zip(cols, f[2:]):
                 rec[c] = float(v)
+    for rec in out.values():
+        rec.setdefault("hmd", humidity_if_generated)
     return {"lat": lat, "days": out}
 
 
@@ -156,7 +168,7 @@ def reach_heat_balance(parts, tave: float, rhum: float, wind: float, solar: floa
 
     Returns the mixed temperature ``t_init``, the equilibrium temperature ``t_eq``, the outflow temperature
     ``t_out``, and the energy relative to 0 C (J): ``in_J`` brought by the sources, ``exchanged_J`` with the air
-    (the surface flux times the parcel's surface, V / depth, times its travel time), ``floor_J`` added by the
+    (the surface flux integrated over the parcel's surface, V / depth, and its travel time), ``floor_J`` added by the
     0.001 C floor, and ``out_J`` leaving with the mixed volume. in + exchanged + floor = out."""
     vol = sum(v for v, _ in parts)
     in_j = RHO_C * sum(v * t for v, t in parts)
@@ -181,9 +193,12 @@ def reach_heat_balance(parts, tave: float, rhum: float, wind: float, solar: floa
     wid_flow = math.sqrt(((q_out / vc) * 2) / ((dp / coef.hex_coef2) / wid_chan)) if q_out > 0 else 0.0
     dep_flow = min(max(0.1, ((dp / coef.hex_coef2) / wid_chan) * wid_flow), dp * 2)
     tau = geo["len"] * 1000.0 / vc                                          # travel time, s
-    flux = k_e * (t_eq - t_init) if coef.heat_exchange else 0.0            # W m-2
-    dt_ex = flux * tau / (RHO_C * dep_flow)
-    exchanged = flux * (vol / dep_flow) * tau if vol > 0 else 0.0           # J over the parcel's surface
+    # the exchange integrated over the travel time: dT/dt = k_e (T_eq - T) / (rho c d) gives an exponential approach
+    # to T_eq. ch_temp takes one explicit step, k_e (T_eq - T) tau / (rho c d), which overshoots T_eq once tau is long
+    # against rho c d / k_e (Osu_1hru's channel reached 90 C); the exact solution can't
+    rate = k_e * tau / (RHO_C * dep_flow)
+    dt_ex = (t_eq - t_init) * -math.expm1(-rate) if coef.heat_exchange else 0.0
+    exchanged = RHO_C * vol * dt_ex                                         # J through the parcel's surface
     t = t_init + dt_ex
     floor = 0.0
     if t < 0.001:
@@ -206,10 +221,12 @@ def stream_temperature(run: str | Path, coef: Coefficients | None = None) -> dic
     head, rows = _rows(swat / "chandeg.con")
     chans = [r[1] for r in rows]
     wst = {r[1]: r[head.index("wst")] for r in rows}
-    geo = {}
+    # each channel's geometry: chandeg.con's lcha row in channel-lte.cha names its hyd-sed-lte.cha row (cha_hyd)
     h2, r2 = _rows(swat / "hyd-sed-lte.cha")
-    for i, r in enumerate(r2):
-        geo[chans[i]] = {k: float(r[h2.index(k)]) for k in ("wd", "dp", "slp", "len", "mann")}
+    hyd = {r[0]: {k: float(r[h2.index(k)]) for k in ("wd", "dp", "slp", "len", "mann")} for r in r2}
+    h3, r3 = _rows(swat / "channel-lte.cha")
+    lte = {r[h3.index("id")]: r[h3.index("cha_hyd")] for r in r3}
+    geo = {r[1]: hyd[lte[r[head.index("lcha")]]] for r in rows}
     area_ha = {r[1]: float(r[head.index("area")]) for r in rows}  # the channel's drainage area, for the peak rate
     lsu_area = {}
     hl, rl = _rows(swat / "ls_unit.def", skip=2)
@@ -241,7 +258,7 @@ def stream_temperature(run: str | Path, coef: Coefficients | None = None) -> dic
             ledger[d] = {c: float(r[f"exchange:{c}:applied"]) for c in chans if f"exchange:{c}:applied" in r}
             seep_made[d] = {c: float(r[f"exchange:{c}:seepage"]) for c in chans if f"exchange:{c}:seepage" in r}
     dates = sorted(set(cha) & set(lsu) & set(ledger))
-    stations = {s: _weather(swat, s) for s in set(wst.values())}
+    stations = {s: _weather(swat, s, coef.humidity_if_generated) for s in set(wst.values())}
 
     def lagged(st, d, n):
         vals = []

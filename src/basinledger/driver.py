@@ -88,7 +88,7 @@ class Basin:
                 S.no_transmission_loss(swat_dir)
             from .temperature import print_daily
             if cfg.outputs.get("temperature"):  # the reach heat balance reads the routing units' daily water
-                print_daily(swat_dir, ["lsunit_wb"])
+                print_daily(swat_dir, ["lsunit_wb", "channel_sd"])
             if cfg.outputs.get("balance"):      # the whole-basin balance reads SWAT+'s daily land budget
                 print_daily(swat_dir, ["basin_wb", "channel_sd", "reservoir"])
             if prepare:

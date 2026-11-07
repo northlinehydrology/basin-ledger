@@ -45,3 +45,32 @@ def test_the_floor_is_counted():
     assert r["t_out"] == pytest.approx(0.001)
     assert r["floor_J"] > 0
     assert r["in_J"] + r["exchanged_J"] + r["floor_J"] == pytest.approx(r["out_J"], rel=1e-9, abs=1e-3)
+
+
+@pytest.mark.slow
+def test_on_a_coupled_run(swatplus):
+    """The heat balance on the synthetic two-way run (testing G4): it closes every reach and day, follows the
+    seasons, and colder groundwater makes a cooler summer stream."""
+    import numpy as np
+    from basinledger import config as C
+    from basinledger.driver import Basin
+    from basinledger.temperature import stream_temperature
+    from conftest import ROOT, RUNS
+    cfg = C.load(ROOT / "examples" / "synthetic" / "two_way.toml")
+    cfg.run_folder = RUNS
+    cfg.outputs = dict(cfg.outputs, temperature=True)
+    b = Basin(cfg, run="two-way-temperature", days=730)
+    b.run()
+    b.write_outputs()
+    b.finalize()
+    run = RUNS / "two-way-temperature"
+    r = stream_temperature(run)
+    h = r["heat"]
+    np.testing.assert_allclose(h["in_J"] + h["exchanged_J"] + h["floor_J"], h["out_J"], rtol=1e-9, atol=1.0)
+    t = r["temperature"][:, 0]
+    months = np.array([int(d[5:7]) for d in r["dates"]])
+    assert np.isfinite(t).all()
+    assert t[np.isin(months, (7, 8))].mean() > t[np.isin(months, (1, 2))].mean()
+    cold = stream_temperature(run, Coefficients(gw_temperature=2.0))["temperature"][:, 0]
+    summer = np.isin(months, (7, 8))
+    assert cold[summer].mean() <= t[summer].mean()
