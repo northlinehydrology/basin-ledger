@@ -498,6 +498,48 @@ Settings the coupling needs, checked when a run starts:
   not coupled are reported as boundary flows.
 - **Water users (Water Ledger's models):** to be listed with the first coupled user in a real example.
 
+## Water quality across links (Andrew, Nov 6, 2026; written before the build)
+
+The coupling's real benefit is that chemistry follows the water through every link, as volume does now. A campus's
+intake is the aquifer's own water at its well, and its return goes into the stream's own water quality, not into
+an analysis after the run. Andrew: "we do need to do the work to get the real benefit of the coupling."
+
+**Constituents, to start:**
+- chloride: conservative, and road salt is Michigan's main source;
+- dissolved solids: the sum of SWAT+'s eight salt ions, conservative as a total;
+- phosphorus: sorbs in the aquifer, by a linear isotherm [A];
+- nitrate: later, since SWAT+ carries it by default.
+
+**Each link, with its mass in the ledger as sent and received:**
+
+| Link | From | To | Needs |
+|---|---|---|---|
+| recharge's mass | SWAT+'s leached mass per aquifer (salt module `perc_*`; soluble P leached) | MODFLOW 6 GWT: the recharge package's concentration (SSM) | swatplus-bmi: recharge mass fluxes readable |
+| the aquifer to the streams | GWT: discharge times the cell's concentration (river and drain cells) | SWAT+'s channel, with the gain | swatplus-bmi: a gain's mass settable |
+| the streams to the aquifer | SWAT+'s channel concentration | GWT: the river package's concentration | swatplus-bmi: channel concentrations readable |
+| a well | GWT: removed at the cell's concentration | the user's intake concentration, set each day | built in Basin Ledger |
+| a return | the user's returned mass | SWAT+'s point source loads (salt recall loads; soluble P) | swatplus-bmi: point-source loads settable (listed already) |
+
+**MODFLOW 6:**
+- a groundwater transport model (GWT) on the flow model's grid, linked by a GWF-GWT exchange;
+- packages: advection; dispersion [A]; mobile storage with porosity [A] and, for phosphorus, sorption [A]; sources
+  and sinks (SSM) reading each boundary's concentration from an auxiliary variable Basin Ledger sets each day;
+- Basin Ledger reads the concentration (GWT's X) at the wells and the river and drain cells.
+
+**Starting concentrations:** a steady-state transport solution under the run's mean recharge concentrations. It is
+checked against public well samples (Water Quality Portal) and the streams' late-summer chemistry, which is mostly
+groundwater. Transport settles over decades, not the year a flow warm-up takes, so the steady state is the start.
+
+**Stages, each with its tests before the next:**
+1. GWT in Basin Ledger with stated recharge concentrations [A]: the mass ledger; the well's intake from GWT; tests
+   that mass closes every day, that a steady state with uniform recharge concentration gives that concentration
+   everywhere, and a one-dimensional transport case against Ogata and Banks (1961).
+2. The streams' side through swatplus-bmi (recharge mass readable, a gain's mass and point-source loads settable,
+   channel concentrations readable): requested of the swatplus-bmi session once stage 1 shows which variables are
+   needed. Until then the return's concentration change is worked out after the run (`analysis.concentration_change`).
+3. In each study, SWAT+'s salt module set up (rain chemistry, fertilizer, road salt), and starting concentrations
+   from public samples.
+
 ## Stream temperature: a reach heat balance (built Nov 6, 2026)
 
 SWAT+ 62.0.1's `ch_temp.f90` can't give a stream temperature that responds to groundwater: no aquifer routine fills
