@@ -81,3 +81,26 @@ def test_point_sources_on_a_project_with_none(swatplus, tmp_path):
     ret = t["user:campus:return"]
     assert ret.sum() > 0
     np.testing.assert_allclose(t["route:swat:point_source:blowdown:delivered"], ret, rtol=1e-6, atol=1e-9)
+
+
+def test_what_a_cap_costs_the_campus(swatplus, tmp_path):
+    """Under a withdrawal cap a towers plant can't reject all its heat: the unremoved heat and the hours its setpoint
+    was lost are booked each day (report), and there is none without the cap."""
+    out = {}
+    for capped in (False, True):
+        cfg = campus_config(tmp_path)
+        cfg.users[0].report = {"unremoved_heat_MWh": "data_center__unremoved_heat_power",
+                               "setpoint_lost_h": "data_center__setpoint_lost_time"}
+        if capped:  # a cap on every day, at a tenth of what it takes in July
+            cfg.rules = [{"name": "cap", "kind": "curtailment", "user": "campus", "channel": "cha01",
+                          "threshold": 1e9, "limit": 2e-4}]
+        b = Basin(cfg, run=f"campus-cap-{capped}", users=True, days=240)
+        b.run()
+        out[capped] = b.ledger.table()
+        b.finalize()
+    free, cap = out[False], out[True]
+    assert np.nansum(free["user:campus:unremoved_heat_MWh"]) == 0
+    assert np.nansum(cap["user:campus:unremoved_heat_MWh"]) > 0
+    assert np.nansum(cap["user:campus:setpoint_lost_h"]) > 0
+    assert np.nansum(cap["user:campus:withdrawal"]) < np.nansum(free["user:campus:withdrawal"])
+    assert np.nansum(cap["rule:cap:active"]) == 239  # from the second day

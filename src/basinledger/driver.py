@@ -197,7 +197,7 @@ class Basin:
                 comp = load_component(u.component)
                 wu = WaterUser(u.name, comp, str(u.config) if u.config else None,
                                variables=u.variables or None, constituents=u.constituents,
-                               inputs=self._forcing(u, comp))
+                               inputs=self._forcing(u, comp), report=u.report or None)
                 self.users.append((u, wu))
                 for route in (u.withdrawal, u.returns):
                     k, name = kind(route)
@@ -361,6 +361,8 @@ class Basin:
                 L.enter(k + f"{c}:kg", kg)
             if use.energy is not None:
                 L.enter(k + "MWh", use.energy)
+            for name, v in use.reported.items():
+                L.enter(k + name, v)
             for route, vol, is_return in ((u.withdrawal, use.withdrawal, False), (u.returns, use.returned, True)):
                 kd, name = kind(route)
                 if kd == "utility":
