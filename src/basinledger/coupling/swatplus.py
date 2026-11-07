@@ -60,6 +60,8 @@ def add_point_sources(project: Path, sources: list[tuple[str, str]]):
     """Daily point sources (recall objects) into channels, zero flow in the files: [(name, channel), ...]."""
     project = Path(project)
     start, end = _period(project)
+    if not (project / "recall.con").exists():
+        _no_recalls_yet(project, sources[0][1])
     con = (project / "recall.con").read_text().splitlines()
     hdr = con[:2]
     template = con[2].split()
@@ -90,6 +92,33 @@ def add_point_sources(project: Path, sources: list[tuple[str, str]]):
             d += dt.timedelta(days=1)
         (project / f"{name}.rec").write_text("\n".join(lines) + "\n")
     (project / "recall.rec").write_text("\n".join(rec) + "\n")
+
+
+def _no_recalls_yet(project: Path, channel: str):
+    """A project with no point sources: write recall.con with one template row (at the channel's position and
+    station) and name it in file.cio (the recall line, and recall.con in the connect line's ninth place, as SWAT+
+    62.0.1's readcio_read.f90 reads them)."""
+    lines = (project / "chandeg.con").read_text().splitlines()
+    head = lines[1].split()
+    row = next(ln.split() for ln in lines[2:] if ln.split() and ln.split()[1] == channel)
+    get = dict(zip(head, row))
+    (project / "recall.con").write_text(
+        "recall.con: point sources (Basin Ledger)\n"
+        "      NUMB    NAME    GIS_ID    AREA_HA      LAT     LONG       ELEV    RECALL     WST   CONSTIT  OVERFLOW  "
+        "RULESET OUT_TOT OBTYP_OUT1 HTYPNO_OUT1  HTYP_OUT1  FRAC_OUT1\n"
+        f"         1  template      1        0.000    {get['lat']}   {get['lon']}     {get['elev']}      1    "
+        f"{get['wst']}         0         0        0       1         sdc          {get['id']}        tot     1.0000\n")
+    cio = (project / "file.cio").read_text().splitlines()
+    for i, ln in enumerate(cio):
+        f = ln.split()
+        if f[:1] == ["connect"]:
+            while len(f) < 10:
+                f.append("null")
+            f[9] = "recall.con"
+            cio[i] = "  ".join(f)
+        elif f[:1] == ["recall"]:
+            cio[i] = "recall            recall.rec"
+    (project / "file.cio").write_text("\n".join(cio) + "\n")
 
 
 def aquifer_pass_through(project: Path):

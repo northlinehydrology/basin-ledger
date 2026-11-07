@@ -61,3 +61,23 @@ def test_campus_on_swat_weather(swatplus, tmp_path):
     assert abs(cap["total"]["residual"]) <= 1e-6 * cap["total"]["pumping"]
     out = A.concentration_change(flow, ret, t["user:campus:dissolved_solids:kg"], 0.15)
     assert np.nanmax(out["change_percent"][ret > 0]) > 0
+
+
+def test_point_sources_on_a_project_with_none(swatplus, tmp_path):
+    """A project with no recall objects (the Clam's) gets them: recall.con and file.cio are written, and the
+    blowdown reaches the channel."""
+    import shutil
+    proj = tmp_path / "osu"
+    shutil.copytree(swatplus / "Osu_1hru", proj)
+    (proj / "recall.con").unlink()
+    cio = (proj / "file.cio").read_text().replace("recall.con", "null").replace("recall.rec", "null")
+    (proj / "file.cio").write_text(cio)
+    cfg = campus_config(tmp_path)
+    cfg.swat_project = proj
+    b = Basin(cfg, run="campus-no-recalls", users=True, days=60)
+    b.run()
+    t = b.ledger.table()
+    b.finalize()
+    ret = t["user:campus:return"]
+    assert ret.sum() > 0
+    np.testing.assert_allclose(t["route:swat:point_source:blowdown:delivered"], ret, rtol=1e-6, atol=1e-9)
